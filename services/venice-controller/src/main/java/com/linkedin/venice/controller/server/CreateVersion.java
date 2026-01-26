@@ -265,6 +265,8 @@ public class CreateVersion extends AbstractRoute {
     } else if (pushType == PushType.STREAM_REPROCESSING) {
       responseTopic = Version.composeStreamReprocessingTopic(storeName, version.getNumber());
     } else {
+      // BATCH, BLOB, and other push types use the version topic
+      // For BLOB pushes, this topic is used for control messages (SOP/EOP) only
       responseTopic = version.kafkaTopicName();
     }
     return responseTopic;
@@ -315,6 +317,18 @@ public class CreateVersion extends AbstractRoute {
     response.setCompressionStrategy(getCompressionStrategy(version, response.getKafkaTopic()));
     // Set the bootstrap servers
     configureSourceFabric(admin, version, isActiveActiveReplicationEnabledInAllRegions, request, response);
+
+    // For blob-based push, set the blob staging path
+    if (pushType.isBlob()) {
+      String blobStagingBasePath = admin.getBlobStagingBasePath(clusterName);
+      String blobStagingPath = blobStagingBasePath + "/" + storeName + "_v" + version.getNumber();
+      response.setBlobStagingPath(blobStagingPath);
+      LOGGER.info(
+          "Blob push staging path set to {} for store: {}, version: {}",
+          blobStagingPath,
+          storeName,
+          version.getNumber());
+    }
   }
 
   /**
@@ -590,6 +604,14 @@ public class CreateVersion extends AbstractRoute {
           HttpStatus.SC_BAD_REQUEST,
           "requesting topic for incremental push to store: " + store.getName()
               + " which does not have incremental push enabled.",
+          ErrorType.BAD_REQUEST);
+    }
+    // Blob-based push is only supported for batch-only stores (not hybrid)
+    if (pushType.isBlob() && store.isHybrid()) {
+      throw new VeniceHttpException(
+          HttpStatus.SC_BAD_REQUEST,
+          "Blob-based push is not supported for hybrid store: " + store.getName()
+              + ". Please use standard batch push or disable hybrid mode.",
           ErrorType.BAD_REQUEST);
     }
   }

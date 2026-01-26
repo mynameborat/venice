@@ -75,6 +75,7 @@ import static com.linkedin.venice.ConfigKeys.SERVER_ADAPTIVE_THROTTLER_SIGNAL_ID
 import static com.linkedin.venice.ConfigKeys.SERVER_ADAPTIVE_THROTTLER_SIGNAL_REFRESH_INTERVAL_IN_SECONDS;
 import static com.linkedin.venice.ConfigKeys.SERVER_ADAPTIVE_THROTTLER_SINGLE_GET_LATENCY_THRESHOLD;
 import static com.linkedin.venice.ConfigKeys.SERVER_BATCH_REPORT_END_OF_INCREMENTAL_PUSH_STATUS_ENABLED;
+import static com.linkedin.venice.ConfigKeys.SERVER_BLOB_PUSH_STAGING_BASE_PATH;
 import static com.linkedin.venice.ConfigKeys.SERVER_BLOB_TRANSFER_ADAPTIVE_THROTTLER_ENABLED;
 import static com.linkedin.venice.ConfigKeys.SERVER_BLOB_TRANSFER_ADAPTIVE_THROTTLER_UPDATE_PERCENTAGE;
 import static com.linkedin.venice.ConfigKeys.SERVER_BLOCKING_QUEUE_TYPE;
@@ -618,6 +619,7 @@ public class VeniceServerConfig extends VeniceClusterConfig {
   private final boolean recordLevelMetricWhenBootstrappingCurrentVersionEnabled;
   private final String identityParserClassName;
   private final boolean blobTransferManagerEnabled;
+  private final String blobPushStagingBasePath;
   private final ConfigCommonUtils.ActivationState blobTransferReceiverServerPolicy;
   private final boolean blobTransferSslEnabled;
   private final boolean blobTransferAclEnabled;
@@ -726,6 +728,7 @@ public class VeniceServerConfig extends VeniceClusterConfig {
         serverProperties.getInt(MAX_LEADER_FOLLOWER_STATE_TRANSITION_THREAD_NUMBER, 20);
 
     blobTransferManagerEnabled = serverProperties.getBoolean(BLOB_TRANSFER_MANAGER_ENABLED, false);
+    blobPushStagingBasePath = serverProperties.getString(SERVER_BLOB_PUSH_STAGING_BASE_PATH, "/venice/blobs");
     blobTransferReceiverServerPolicy = ConfigCommonUtils.ActivationState.valueOf(
         serverProperties
             .getString(BLOB_TRANSFER_RECEIVER_SERVER_POLICY, ConfigCommonUtils.ActivationState.NOT_SPECIFIED.name()));
@@ -1236,6 +1239,10 @@ public class VeniceServerConfig extends VeniceClusterConfig {
 
   public boolean isBlobTransferManagerEnabled() {
     return blobTransferManagerEnabled;
+  }
+
+  public String getBlobPushStagingBasePath() {
+    return blobPushStagingBasePath;
   }
 
   public ConfigCommonUtils.ActivationState getBlobTransferReceiverServerPolicy() {

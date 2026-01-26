@@ -52,11 +52,12 @@ public interface Version extends Comparable<Version>, DataModelBackedStructure<S
     BATCH(0), // Batch jobs will create a new version topic and write to it in a batch manner.
     STREAM_REPROCESSING(1), // Reprocessing jobs will create a new version topic and a reprocessing topic.
     STREAM(2), // Stream jobs will write to a buffer or RT topic.
-    INCREMENTAL(3); // Incremental jobs will re-use an existing version topic and write on top of it.
+    INCREMENTAL(3), // Incremental jobs will re-use an existing version topic and write on top of it.
+    BLOB(4); // Blob jobs will generate SST files directly and transfer to servers via blob transfer.
 
     private final int value;
-    private static final Map<Integer, PushType> VALUE_TO_TYPE_MAP = new HashMap<>(4);
-    private static final Map<String, PushType> NAME_TO_TYPE_MAP = new HashMap<>(4);
+    private static final Map<Integer, PushType> VALUE_TO_TYPE_MAP = new HashMap<>(5);
+    private static final Map<String, PushType> NAME_TO_TYPE_MAP = new HashMap<>(5);
 
     // Static initializer for map population
     static {
@@ -88,6 +89,14 @@ public interface Version extends Comparable<Version>, DataModelBackedStructure<S
 
     public boolean isBatchOrStreamReprocessing() {
       return this == BATCH || this == STREAM_REPROCESSING;
+    }
+
+    public boolean isBlob() {
+      return this == BLOB;
+    }
+
+    public boolean isBatchOrBlob() {
+      return this == BATCH || this == BLOB;
     }
 
     /**

@@ -295,6 +295,29 @@ public final class VenicePushJobConstants {
   // Only readable and writable by the user running VPJ - restricted access
   public static final FsPermission PERMISSION_700 = FsPermission.createImmutable((short) 0700);
 
+  // Blob-based push job configs
+  /**
+   * Enable blob-based push where SST files are generated directly and transferred to servers
+   * via blob transfer instead of Kafka.
+   */
+  public static final String BLOB_PUSH_ENABLED = "venice.blob.push.enabled";
+  /**
+   * HDFS staging path for blob-based push SST files.
+   */
+  public static final String BLOB_PUSH_STAGING_PATH = "venice.blob.push.staging.path";
+  /**
+   * Local temp directory for SST file generation during blob push.
+   */
+  public static final String BLOB_PUSH_LOCAL_TEMP_DIR = "venice.blob.push.local.temp.dir";
+  /**
+   * Maximum SST file size in bytes before rotation (default: 256MB).
+   */
+  public static final String BLOB_PUSH_MAX_SST_FILE_SIZE_BYTES = "venice.blob.push.max.sst.file.size.bytes";
+  /**
+   * Maximum records per SST file before rotation (default: 10M).
+   */
+  public static final String BLOB_PUSH_MAX_RECORDS_PER_SST_FILE = "venice.blob.push.max.records.per.sst.file";
+
   public static final String VALUE_SCHEMA_ID_PROP = "value.schema.id";
 
   public static final String RMD_SCHEMA_ID_PROP = "rmd.schema.id";

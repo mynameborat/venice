@@ -14,6 +14,8 @@ import static com.linkedin.venice.utils.ByteUtils.generateHumanReadableByteCount
 import static com.linkedin.venice.vpj.VenicePushJobConstants.ALLOW_DUPLICATE_KEY;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.ALLOW_REGULAR_PUSH_WITH_TTL_REPUSH;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.BATCH_NUM_BYTES_PROP;
+import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_PUSH_ENABLED;
+import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_PUSH_STAGING_PATH;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.COMPRESSION_DICTIONARY_SAMPLE_SIZE;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.COMPRESSION_DICTIONARY_SIZE_LIMIT;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.COMPRESSION_METRIC_COLLECTION_ENABLED;
@@ -109,6 +111,7 @@ import com.linkedin.venice.hadoop.exceptions.VeniceInvalidInputException;
 import com.linkedin.venice.hadoop.exceptions.VeniceSchemaFieldNotFoundException;
 import com.linkedin.venice.hadoop.exceptions.VeniceSchemaMismatchException;
 import com.linkedin.venice.hadoop.input.kafka.KafkaInputDictTrainer;
+import com.linkedin.venice.hadoop.mapreduce.datawriter.jobs.BlobDataWriterMRJob;
 import com.linkedin.venice.hadoop.mapreduce.datawriter.jobs.DataWriterMRJob;
 import com.linkedin.venice.hadoop.mapreduce.engine.DefaultJobClientWrapper;
 import com.linkedin.venice.hadoop.schema.HDFSSchemaSource;
@@ -529,11 +532,30 @@ public class VenicePushJob implements AutoCloseable {
           props.getBoolean(COMPRESSION_METRIC_COLLECTION_ENABLED, DEFAULT_COMPRESSION_METRIC_COLLECTION_ENABLED);
     }
 
+    // Blob-based push configuration
+    pushJobSettingToReturn.blobPushEnabled = props.getBoolean(BLOB_PUSH_ENABLED, false);
+    if (pushJobSettingToReturn.blobPushEnabled) {
+      // Validate blob push is not used with unsupported features
+      if (pushJobSettingToReturn.isSourceKafka) {
+        throw new VeniceException("Blob-based push is not supported with Kafka Input Format (repush)");
+      }
+      if (pushJobSettingToReturn.isIncrementalPush) {
+        throw new VeniceException("Blob-based push is not supported with incremental push");
+      }
+      // Get staging path from config or controller will provide one
+      pushJobSettingToReturn.blobPushStagingPath = props.getString(BLOB_PUSH_STAGING_PATH, null);
+      pushJobSettingToReturn.pushType = Version.PushType.BLOB;
+    }
+
     // Compute-engine abstraction related configs
     String dataWriterComputeJobClass = props.getString(DATA_WRITER_COMPUTE_JOB_CLASS, (String) null);
 
-    // Currently, only MR mode supports KIF. This is temporary.
-    if (dataWriterComputeJobClass == null || pushJobSettingToReturn.isSourceKafka) {
+    // Select the appropriate compute job class
+    if (pushJobSettingToReturn.blobPushEnabled) {
+      // Use blob-based MR job for blob push
+      pushJobSettingToReturn.dataWriterComputeJobClass = BlobDataWriterMRJob.class;
+    } else if (dataWriterComputeJobClass == null || pushJobSettingToReturn.isSourceKafka) {
+      // Currently, only MR mode supports KIF. This is temporary.
       pushJobSettingToReturn.dataWriterComputeJobClass = DataWriterMRJob.class;
     } else {
       Class objectClass = ReflectUtils.loadClass(dataWriterComputeJobClass);

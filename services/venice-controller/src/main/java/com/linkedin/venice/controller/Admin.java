@@ -523,6 +523,14 @@ public interface Admin extends AutoCloseable, Closeable {
   String getKafkaBootstrapServers(boolean isSSL);
 
   /**
+   * Return the base path for blob-based push staging directory.
+   * SST files will be stored under {basePath}/{storeName}_v{version}/partition_{N}/
+   * @param clusterName the cluster name
+   * @return the blob staging base path (e.g., /venice/blobs)
+   */
+  String getBlobStagingBasePath(String clusterName);
+
+  /**
    * Return the region name of this Admin
    * @return the region name of this controller
    */

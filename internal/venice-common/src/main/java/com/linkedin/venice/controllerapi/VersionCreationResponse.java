@@ -29,6 +29,9 @@ public class VersionCreationResponse extends VersionResponse {
 
   private String kafkaSourceRegion = null;
 
+  // Blob-based push staging path (only set when push type is BLOB)
+  private String blobStagingPath = null;
+
   public void setPartitions(int partitions) {
     this.partitions = partitions;
   }
@@ -117,6 +120,14 @@ public class VersionCreationResponse extends VersionResponse {
     return this.daVinciPushStatusStoreEnabled;
   }
 
+  public String getBlobStagingPath() {
+    return blobStagingPath;
+  }
+
+  public void setBlobStagingPath(String blobStagingPath) {
+    this.blobStagingPath = blobStagingPath;
+  }
+
   @JsonIgnore
   public String toString() {
     return VersionCreationResponse.class.getSimpleName() + "(partitions: " + partitions + ", replicas: " + replicas
@@ -124,6 +135,7 @@ public class VersionCreationResponse extends VersionResponse {
         + kafkaSourceRegion + ", enableSSL: " + enableSSL + ", compressionStrategy: " + compressionStrategy.toString()
         + ", partitionerClass: " + partitionerClass + ", partitionerParams: " + partitionerParams
         + ", amplificationFactor: " + amplificationFactor + ", daVinciPushStatusStoreEnabled: "
-        + daVinciPushStatusStoreEnabled + ", super: " + super.toString() + ")";
+        + daVinciPushStatusStoreEnabled + ", blobStagingPath: " + blobStagingPath + ", super: " + super.toString()
+        + ")";
   }
 }

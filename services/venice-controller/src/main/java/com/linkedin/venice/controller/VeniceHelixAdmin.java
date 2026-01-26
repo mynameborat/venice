@@ -7633,6 +7633,15 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
     }
   }
 
+  /**
+   * @see Admin#getBlobStagingBasePath(String)
+   */
+  @Override
+  public String getBlobStagingBasePath(String clusterName) {
+    VeniceControllerClusterConfig controllerConfig = getControllerConfig(clusterName);
+    return controllerConfig.getBlobStagingBasePath();
+  }
+
   @Override
   public String getRegionName() {
     return multiClusterConfigs.getRegionName();

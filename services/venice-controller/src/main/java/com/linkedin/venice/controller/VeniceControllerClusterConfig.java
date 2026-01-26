@@ -37,6 +37,7 @@ import static com.linkedin.venice.ConfigKeys.CONTROLLER_BACKUP_VERSION_DELETION_
 import static com.linkedin.venice.ConfigKeys.CONTROLLER_BACKUP_VERSION_METADATA_FETCH_BASED_CLEANUP_ENABLED;
 import static com.linkedin.venice.ConfigKeys.CONTROLLER_BACKUP_VERSION_REPLICA_REDUCTION_ENABLED;
 import static com.linkedin.venice.ConfigKeys.CONTROLLER_BACKUP_VERSION_RETENTION_BASED_CLEANUP_ENABLED;
+import static com.linkedin.venice.ConfigKeys.CONTROLLER_BLOB_STAGING_BASE_PATH;
 import static com.linkedin.venice.ConfigKeys.CONTROLLER_CLUSTER;
 import static com.linkedin.venice.ConfigKeys.CONTROLLER_CLUSTER_HELIX_CLOUD_ENABLED;
 import static com.linkedin.venice.ConfigKeys.CONTROLLER_CLUSTER_LEADER_HAAS;
@@ -550,6 +551,11 @@ public class VeniceControllerClusterConfig {
    */
   private final String kafkaBootstrapServers;
 
+  /**
+   * Base path for blob-based push staging directory.
+   */
+  private final String blobStagingBasePath;
+
   private final String sslKafkaBootStrapServers;
 
   /**
@@ -704,6 +710,7 @@ public class VeniceControllerClusterConfig {
     this.minNumberOfPartitions = props.getInt(DEFAULT_NUMBER_OF_PARTITION);
     this.minNumberOfPartitionsForHybrid = props.getInt(DEFAULT_NUMBER_OF_PARTITION_FOR_HYBRID, minNumberOfPartitions);
     this.kafkaBootstrapServers = props.getString(KAFKA_BOOTSTRAP_SERVERS);
+    this.blobStagingBasePath = props.getString(CONTROLLER_BLOB_STAGING_BASE_PATH, "/venice/blobs");
     this.partitionSize = props.getSizeInBytes(DEFAULT_PARTITION_SIZE);
     this.maxNumberOfPartitions = props.getInt(DEFAULT_MAX_NUMBER_OF_PARTITIONS);
     this.partitionCountRoundUpEnabled = props.getBoolean(ENABLE_PARTITION_COUNT_ROUND_UP, false);
@@ -1429,6 +1436,13 @@ public class VeniceControllerClusterConfig {
    */
   public String getKafkaBootstrapServers() {
     return kafkaBootstrapServers;
+  }
+
+  /**
+   * @return Base path for blob-based push staging directory.
+   */
+  public String getBlobStagingBasePath() {
+    return blobStagingBasePath;
   }
 
   public Map<String, String> getClusterToD2Map() {

@@ -170,4 +170,19 @@ public class PushJobSetting implements Serializable {
   public boolean isSortedIngestionEnabled;
   public boolean allowRegularPushWithTTLRepush;
 
+  // Blob-based push settings
+  /**
+   * Enable blob-based push where SST files are generated directly and transferred
+   * via blob transfer instead of Kafka.
+   */
+  public boolean blobPushEnabled;
+  /**
+   * HDFS staging path for blob-based push SST files.
+   */
+  public String blobPushStagingPath;
+  /**
+   * Push type for this job (BATCH, BLOB, etc.)
+   */
+  public Version.PushType pushType = Version.PushType.BATCH;
+
 }
