@@ -14,12 +14,12 @@ import com.linkedin.venice.blobtransfer.client.BlobStorageClient;
 import com.linkedin.venice.exceptions.VeniceException;
 import com.linkedin.venice.hadoop.output.HDFSBlobStorageClient;
 import com.linkedin.venice.meta.Version;
-import com.linkedin.venice.utils.Utils;
 import com.linkedin.venice.utils.VeniceProperties;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Iterator;
+import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -109,7 +109,11 @@ public class BlobPartitionWriter extends AbstractPartitionWriter {
     // Clean up any existing temp directory
     File tempDir = new File(localTempDir);
     if (tempDir.exists()) {
-      Utils.recursiveDeleteFolder(tempDir);
+      try {
+        FileUtils.deleteDirectory(tempDir);
+      } catch (IOException e) {
+        LOGGER.warn("Failed to clean up existing temp directory: {}", localTempDir, e);
+      }
     }
 
     this.sstFileWriter = new VPJSstFileWriter(
@@ -272,9 +276,11 @@ public class BlobPartitionWriter extends AbstractPartitionWriter {
   private void cleanupLocalTempDir() {
     File tempDir = new File(localTempDir);
     if (tempDir.exists()) {
-      boolean deleted = Utils.recursiveDeleteFolder(tempDir);
-      if (!deleted) {
-        LOGGER.warn("Failed to clean up local temp directory: {}", localTempDir);
+      try {
+        FileUtils.deleteDirectory(tempDir);
+        LOGGER.debug("Cleaned up local temp directory: {}", localTempDir);
+      } catch (IOException e) {
+        LOGGER.warn("Failed to clean up local temp directory: {}", localTempDir, e);
       }
     }
   }

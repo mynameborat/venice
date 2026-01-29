@@ -1,18 +1,17 @@
 package com.linkedin.davinci.kafka.consumer;
 
-import com.linkedin.davinci.blobtransfer.HDFSBlobPullService;
+import com.linkedin.davinci.blobtransfer.BlobPullService;
 import com.linkedin.davinci.config.VeniceStoreVersionConfig;
 import com.linkedin.davinci.notifier.VeniceNotifier;
-import com.linkedin.davinci.storage.StorageMetadataService;
 import com.linkedin.davinci.store.AbstractStorageEngine;
 import com.linkedin.venice.blobtransfer.BlobFileMetadata;
 import com.linkedin.venice.blobtransfer.BlobTransferManifest;
 import com.linkedin.venice.exceptions.VeniceException;
 import com.linkedin.venice.meta.Version;
-import com.linkedin.venice.offsets.OffsetRecord;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -21,9 +20,9 @@ import org.apache.logging.log4j.Logger;
 /**
  * BlobIngestionTask handles the ingestion of SST files for blob-based Venice push.
  * Instead of consuming data from Kafka, this task:
- * 1. Pulls SST files from HDFS
+ * 1. Pulls SST files from blob storage (HDFS, S3, etc.)
  * 2. Ingests them directly into RocksDB via ingestExternalFile()
- * 3. Updates the offset record
+ * 3. Notifies completion
  *
  * This is a lightweight alternative to StoreIngestionTask for PushType.BLOB versions.
  */
@@ -37,10 +36,9 @@ public class BlobIngestionTask implements Closeable {
   private final String localBaseDir;
   private final VeniceStoreVersionConfig storeConfig;
   private final AbstractStorageEngine storageEngine;
-  private final StorageMetadataService storageMetadataService;
   private final VeniceNotifier notifier;
 
-  private HDFSBlobPullService blobPullService;
+  private BlobPullService blobPullService;
   private boolean isCompleted = false;
 
   public BlobIngestionTask(
@@ -51,7 +49,6 @@ public class BlobIngestionTask implements Closeable {
       String localBaseDir,
       VeniceStoreVersionConfig storeConfig,
       AbstractStorageEngine storageEngine,
-      StorageMetadataService storageMetadataService,
       VeniceNotifier notifier) {
     this.storeName = storeName;
     this.version = version;
@@ -60,56 +57,54 @@ public class BlobIngestionTask implements Closeable {
     this.localBaseDir = localBaseDir;
     this.storeConfig = storeConfig;
     this.storageEngine = storageEngine;
-    this.storageMetadataService = storageMetadataService;
     this.notifier = notifier;
-    this.blobPullService = new HDFSBlobPullService();
   }
 
   /**
    * Execute the blob ingestion for this partition.
    * This method:
-   * 1. Pulls SST files from HDFS to local directory
+   * 1. Pulls SST files from blob storage to local directory
    * 2. Ingests them into RocksDB
-   * 3. Updates the offset record
-   * 4. Notifies completion
+   * 3. Notifies completion
    */
   public void execute() {
+    if (blobPullService == null) {
+      throw new VeniceException("BlobPullService must be set before executing blob ingestion");
+    }
+
     String kafkaTopic = Version.composeKafkaTopic(storeName, version);
-    String hdfsPartitionPath = blobStagingPath + "/partition_" + partition;
+    String remotePartitionPath = blobStagingPath + "/partition_" + partition;
     String localPartitionDir = localBaseDir + "/" + kafkaTopic + "/" + partition + "/blob_ingestion";
 
     LOGGER.info(
-        "Starting blob ingestion for store: {}, version: {}, partition: {}, HDFS path: {}",
+        "Starting blob ingestion for store: {}, version: {}, partition: {}, remote path: {}",
         storeName,
         version,
         partition,
-        hdfsPartitionPath);
+        remotePartitionPath);
 
     try {
       // Check if blobs are available
-      if (!blobPullService.isBlobAvailable(hdfsPartitionPath)) {
+      if (!blobPullService.isBlobAvailable(remotePartitionPath)) {
         throw new VeniceException(
-            "Blob files not available at HDFS path: " + hdfsPartitionPath + " for partition " + partition);
+            "Blob files not available at path: " + remotePartitionPath + " for partition " + partition);
       }
 
-      // Pull SST files from HDFS
-      BlobTransferManifest manifest = blobPullService.pullFromHDFS(hdfsPartitionPath, localPartitionDir);
+      // Pull SST files from blob storage
+      BlobTransferManifest manifest = blobPullService.pullBlobs(remotePartitionPath, localPartitionDir);
 
       // Ingest SST files into RocksDB
       ingestSstFiles(manifest, localPartitionDir);
 
-      // Update offset record to mark completion
-      updateOffsetRecord(manifest);
-
-      // Notify completion
+      // Notify completion (pass null for PubSubPosition since blob ingestion doesn't have Kafka offsets)
       if (notifier != null) {
-        notifier.completed(kafkaTopic, partition, 0, "Blob ingestion completed");
+        notifier.completed(kafkaTopic, partition, null, "Blob ingestion completed");
       }
 
       isCompleted = true;
 
       LOGGER.info(
-          "Successfully completed blob ingestion for store: {}, version: {}, partition: {}, " + "records: {}",
+          "Successfully completed blob ingestion for store: {}, version: {}, partition: {}, records: {}",
           storeName,
           version,
           partition,
@@ -143,8 +138,8 @@ public class BlobIngestionTask implements Closeable {
     }
 
     // Get list of SST file paths for default column family
-    List<String> defaultCfSstFilePaths = new java.util.ArrayList<>();
-    List<String> rmdCfSstFilePaths = new java.util.ArrayList<>();
+    List<String> defaultCfSstFilePaths = new ArrayList<>();
+    List<String> rmdCfSstFilePaths = new ArrayList<>();
 
     for (BlobFileMetadata fileMetadata: sstFiles) {
       String localFilePath = localDir + "/" + fileMetadata.getFileName();
@@ -181,24 +176,6 @@ public class BlobIngestionTask implements Closeable {
   }
 
   /**
-   * Update the offset record to mark the partition as completed.
-   */
-  private void updateOffsetRecord(BlobTransferManifest manifest) {
-    String kafkaTopic = Version.composeKafkaTopic(storeName, version);
-
-    // Create an offset record that indicates blob ingestion is complete
-    OffsetRecord offsetRecord = new OffsetRecord(storageMetadataService.getLocalPartitionIdForKafkaTopic(kafkaTopic));
-    // Set a special marker to indicate blob-based ingestion
-    offsetRecord.setDatabaseInfo(
-        com.google.common.collect.ImmutableMap
-            .of("blob_ingestion", "true", "record_count", String.valueOf(manifest.getRecordCount())));
-
-    storageMetadataService.put(kafkaTopic, partition, offsetRecord);
-
-    LOGGER.info("Updated offset record for blob ingestion - topic: {}, partition: {}", kafkaTopic, partition);
-  }
-
-  /**
    * Clean up local temporary files after ingestion.
    */
   private void cleanupLocalFiles(String localDir) {
@@ -208,10 +185,14 @@ public class BlobIngestionTask implements Closeable {
         File[] files = dir.listFiles();
         if (files != null) {
           for (File file: files) {
-            file.delete();
+            if (!file.delete()) {
+              LOGGER.warn("Failed to delete file: {}", file.getAbsolutePath());
+            }
           }
         }
-        dir.delete();
+        if (!dir.delete()) {
+          LOGGER.warn("Failed to delete directory: {}", dir.getAbsolutePath());
+        }
         LOGGER.debug("Cleaned up local blob ingestion directory: {}", localDir);
       }
     } catch (Exception e) {
@@ -223,8 +204,23 @@ public class BlobIngestionTask implements Closeable {
     return isCompleted;
   }
 
-  // Visible for testing
-  void setBlobPullService(HDFSBlobPullService blobPullService) {
+  public String getStoreName() {
+    return storeName;
+  }
+
+  public int getVersion() {
+    return version;
+  }
+
+  public int getPartition() {
+    return partition;
+  }
+
+  /**
+   * Set the blob pull service implementation.
+   * This must be called before execute().
+   */
+  public void setBlobPullService(BlobPullService blobPullService) {
     this.blobPullService = blobPullService;
   }
 

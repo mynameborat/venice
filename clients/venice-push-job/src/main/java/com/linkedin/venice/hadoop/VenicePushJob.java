@@ -543,7 +543,7 @@ public class VenicePushJob implements AutoCloseable {
         throw new VeniceException("Blob-based push is not supported with incremental push");
       }
       // Get staging path from config or controller will provide one
-      pushJobSettingToReturn.blobPushStagingPath = props.getString(BLOB_PUSH_STAGING_PATH, null);
+      pushJobSettingToReturn.blobPushStagingPath = props.getString(BLOB_PUSH_STAGING_PATH, (String) null);
       pushJobSettingToReturn.pushType = Version.PushType.BLOB;
     }
 

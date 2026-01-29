@@ -4486,6 +4486,14 @@ public class VeniceParentHelixAdmin implements Admin {
   }
 
   /**
+   * @see VeniceHelixAdmin#getBlobStagingBasePath(String)
+   */
+  @Override
+  public String getBlobStagingBasePath(String clusterName) {
+    return getVeniceHelixAdmin().getBlobStagingBasePath(clusterName);
+  }
+
+  /**
    * @see VeniceHelixAdmin#getPubSubBootstrapServersForRegion(String)
    */
   @Override
