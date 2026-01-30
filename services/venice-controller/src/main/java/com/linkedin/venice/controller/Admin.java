@@ -761,6 +761,17 @@ public interface Admin extends AutoCloseable, Closeable {
 
   void sendPushJobDetails(PushJobStatusRecordKey key, PushJobDetails value);
 
+  /**
+   * Handle notification that blob-based push data is ready for a specific version.
+   * Called by VPJ after the data writer job completes for PushType.BLOB.
+   *
+   * @param clusterName The name of the cluster
+   * @param storeName The name of the store
+   * @param version The version number
+   * @param blobStagingPath The HDFS path where SST files are staged
+   */
+  void handleBlobPushReadiness(String clusterName, String storeName, int version, String blobStagingPath);
+
   PushJobDetails getPushJobDetails(PushJobStatusRecordKey key);
 
   BatchJobHeartbeatValue getBatchJobHeartbeatValue(BatchJobHeartbeatKey batchJobHeartbeatKey);

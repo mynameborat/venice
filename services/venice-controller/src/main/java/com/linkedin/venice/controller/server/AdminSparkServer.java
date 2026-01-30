@@ -89,6 +89,7 @@ import static com.linkedin.venice.controllerapi.ControllerRoute.REPUSH_STORE;
 import static com.linkedin.venice.controllerapi.ControllerRoute.REQUEST_TOPIC;
 import static com.linkedin.venice.controllerapi.ControllerRoute.ROLLBACK_TO_BACKUP_VERSION;
 import static com.linkedin.venice.controllerapi.ControllerRoute.ROLL_FORWARD_TO_FUTURE_VERSION;
+import static com.linkedin.venice.controllerapi.ControllerRoute.SEND_BLOB_PUSH_READINESS;
 import static com.linkedin.venice.controllerapi.ControllerRoute.SEND_HEARTBEAT_TIMESTAMP_TO_SYSTEM_STORE;
 import static com.linkedin.venice.controllerapi.ControllerRoute.SEND_PUSH_JOB_DETAILS;
 import static com.linkedin.venice.controllerapi.ControllerRoute.SET_MIGRATION_PUSH_STRATEGY;
@@ -575,6 +576,9 @@ public class AdminSparkServer extends AbstractVeniceService {
     httpService.post(
         SEND_PUSH_JOB_DETAILS.getPath(),
         new VeniceParentControllerRegionStateHandler(admin, jobRoutes.sendPushJobDetails(admin)));
+    httpService.post(
+        SEND_BLOB_PUSH_READINESS.getPath(),
+        new VeniceParentControllerRegionStateHandler(admin, jobRoutes.sendBlobPushReadiness(admin)));
     httpService.post(
         UPDATE_ACL.getPath(),
         new VeniceParentControllerRegionStateHandler(

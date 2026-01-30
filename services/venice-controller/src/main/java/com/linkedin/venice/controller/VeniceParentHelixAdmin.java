@@ -5199,6 +5199,14 @@ public class VeniceParentHelixAdmin implements Admin {
   }
 
   /**
+   * @see VeniceHelixAdmin#handleBlobPushReadiness(String, String, int, String)
+   */
+  @Override
+  public void handleBlobPushReadiness(String clusterName, String storeName, int version, String blobStagingPath) {
+    getVeniceHelixAdmin().handleBlobPushReadiness(clusterName, storeName, version, blobStagingPath);
+  }
+
+  /**
    * @see VeniceHelixAdmin#getPushJobDetails(PushJobStatusRecordKey)
    */
   @Override

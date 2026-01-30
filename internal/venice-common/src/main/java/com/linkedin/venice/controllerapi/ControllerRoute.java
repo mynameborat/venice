@@ -8,6 +8,7 @@ import static com.linkedin.venice.controllerapi.ControllerApiConstants.AUTO_SCHE
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.BACKUP_STRATEGY;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.BATCH_GET_LIMIT;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.BATCH_GET_ROUTER_CACHE_ENABLED;
+import static com.linkedin.venice.controllerapi.ControllerApiConstants.BLOB_STAGING_PATH;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.BOOTSTRAP_TO_ONLINE_TIMEOUT_IN_HOURS;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.CHUNKING_ENABLED;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.CLIENT_DECOMPRESSION_ENABLED;
@@ -226,6 +227,10 @@ public enum ControllerRoute implements VeniceDimensionInterface {
 
   SEND_PUSH_JOB_DETAILS(
       "/send_push_job_details", HttpMethod.POST, Arrays.asList(CLUSTER, NAME, VERSION), PUSH_JOB_DETAILS
+  ),
+
+  SEND_BLOB_PUSH_READINESS(
+      "/send_blob_push_readiness", HttpMethod.POST, Arrays.asList(CLUSTER, NAME, VERSION, BLOB_STAGING_PATH)
   ),
 
   SEND_HEARTBEAT_TIMESTAMP_TO_SYSTEM_STORE(

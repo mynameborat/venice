@@ -109,6 +109,7 @@ public class ControllerApiConstants {
   public static final String PUSH_JOB_STATUS = "push_job_status";
   public static final String PUSH_JOB_DURATION = "push_job_duration";
   public static final String PUSH_JOB_DETAILS = "push_job_details";
+  public static final String BLOB_STAGING_PATH = "blob_staging_path";
 
   public static final String WRITE_COMPUTATION_ENABLED = "write_computation_enabled";
   public static final String REPLICATION_METADATA_PROTOCOL_VERSION_ID = "replication_metadata_protocol_version_id";

@@ -1,5 +1,6 @@
 package com.linkedin.venice.controller.server;
 
+import static com.linkedin.venice.controllerapi.ControllerApiConstants.BLOB_STAGING_PATH;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.CLUSTER;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.FABRIC;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.INCREMENTAL_PUSH_VERSION;
@@ -11,6 +12,7 @@ import static com.linkedin.venice.controllerapi.ControllerApiConstants.VERSION;
 import static com.linkedin.venice.controllerapi.ControllerRoute.GET_ONGOING_INCREMENTAL_PUSH_VERSIONS;
 import static com.linkedin.venice.controllerapi.ControllerRoute.JOB;
 import static com.linkedin.venice.controllerapi.ControllerRoute.KILL_OFFLINE_PUSH_JOB;
+import static com.linkedin.venice.controllerapi.ControllerRoute.SEND_BLOB_PUSH_READINESS;
 import static com.linkedin.venice.controllerapi.ControllerRoute.SEND_PUSH_JOB_DETAILS;
 
 import com.linkedin.venice.HttpConstants;
@@ -183,6 +185,42 @@ public class JobRoutes extends AbstractRoute {
               pushJobDetails.failureDetails.toString(),
               pushJobDetails.pushId.toString());
         }
+
+      } catch (Throwable e) {
+        controllerResponse.setError(e);
+        AdminSparkServer.handleError(e, request, response);
+      }
+      return AdminSparkServer.OBJECT_MAPPER.writeValueAsString(controllerResponse);
+    });
+  }
+
+  /**
+   * Handle notification that blob-based push data is ready for a specific version.
+   * Called by VPJ after the data writer job completes for PushType.BLOB.
+   *
+   * @see Admin#handleBlobPushReadiness(String, String, int, String)
+   */
+  public Route sendBlobPushReadiness(Admin admin) {
+    return ((request, response) -> {
+      ControllerResponse controllerResponse = new ControllerResponse();
+      response.type(HttpConstants.JSON);
+      try {
+        AdminSparkServer.validateParams(request, SEND_BLOB_PUSH_READINESS.getParams(), admin);
+        String clusterName = request.queryParams(CLUSTER);
+        String storeName = request.queryParams(NAME);
+        int version = Utils.parseIntFromString(request.queryParams(VERSION), VERSION);
+        String blobStagingPath = request.queryParams(BLOB_STAGING_PATH);
+
+        controllerResponse.setCluster(clusterName);
+        controllerResponse.setName(storeName);
+
+        admin.handleBlobPushReadiness(clusterName, storeName, version, blobStagingPath);
+
+        LOGGER.info(
+            "Successfully processed blob push readiness for store: {}, version: {}, cluster: {}",
+            storeName,
+            version,
+            clusterName);
 
       } catch (Throwable e) {
         controllerResponse.setError(e);

@@ -847,6 +847,26 @@ public class VenicePushJob implements AutoCloseable {
         }
         runJobAndUpdateStatus();
 
+        // For blob-based push, notify controller that blob data is ready
+        if (pushJobSetting.blobPushEnabled) {
+          String blobStagingPath = pushJobSetting.blobPushStagingPath;
+          LOGGER.info(
+              "Blob-based push data writer completed. Notifying controller of blob readiness. "
+                  + "Store: {}, Version: {}, StagingPath: {}",
+              pushJobSetting.storeName,
+              pushJobSetting.version,
+              blobStagingPath);
+          ControllerResponse response =
+              controllerClient.sendBlobPushReadiness(pushJobSetting.storeName, pushJobSetting.version, blobStagingPath);
+          if (response.isError()) {
+            throw new VeniceException("Failed to notify controller of blob push readiness: " + response.getError());
+          }
+          LOGGER.info(
+              "Controller acknowledged blob push readiness for store: {}, version: {}",
+              pushJobSetting.storeName,
+              pushJobSetting.version);
+        }
+
         if (!pushJobSetting.suppressEndOfPushMessage) {
           if (pushJobSetting.sendControlMessagesDirectly) {
             getVeniceWriter(pushJobSetting).broadcastEndOfPush(Collections.emptyMap());

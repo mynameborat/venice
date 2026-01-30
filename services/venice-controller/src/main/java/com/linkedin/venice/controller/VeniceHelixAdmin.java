@@ -1633,6 +1633,52 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
     }
   }
 
+  /**
+   * @see Admin#handleBlobPushReadiness(String, String, int, String)
+   */
+  @Override
+  public void handleBlobPushReadiness(String clusterName, String storeName, int version, String blobStagingPath) {
+    checkControllerLeadershipFor(clusterName);
+    LOGGER.info(
+        "Received blob push readiness notification for store: {}, version: {}, cluster: {}, blobStagingPath: {}",
+        storeName,
+        version,
+        clusterName,
+        blobStagingPath);
+
+    // Verify the store and version exist
+    Store store = getStore(clusterName, storeName);
+    if (store == null) {
+      throw new VeniceNoStoreException(storeName, clusterName);
+    }
+
+    Version storeVersion = store.getVersion(version);
+    if (storeVersion == null) {
+      throw new VeniceException("Version " + version + " not found for store " + storeName);
+    }
+
+    // Verify this is a blob-based push
+    if (storeVersion.getPushType() != PushType.BLOB) {
+      throw new VeniceException(
+          "Version " + version + " of store " + storeName + " is not a blob-based push. Push type: "
+              + storeVersion.getPushType());
+    }
+
+    // TODO: Add logic to coordinate server-side blob pulling when BlobPushCoordinator is implemented.
+    // For MVP, the blob staging path can be derived by servers from a convention based on store/version.
+    // Future implementation will:
+    // 1. Store the blob staging path in version metadata
+    // 2. Trigger servers to pull blobs via Helix or HTTP
+    // 3. Track per-partition pull status
+
+    LOGGER.info(
+        "Blob push readiness notification processed successfully for store: {}, version: {}, cluster: {}, blobStagingPath: {}",
+        storeName,
+        version,
+        clusterName,
+        blobStagingPath);
+  }
+
   void sendPushJobDetailsToLocalRT(PushJobStatusRecordKey key, PushJobDetails value) {
     // Emit push job status metrics
     emitPushJobStatusMetrics(pushJobStatusStatsMap, logCompactionStatsMap, key, value, pushJobUserErrorCheckpoints);

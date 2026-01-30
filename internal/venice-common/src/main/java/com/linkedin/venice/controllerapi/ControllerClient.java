@@ -7,6 +7,7 @@ import static com.linkedin.venice.controllerapi.ControllerApiConstants.AUTO_STOR
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.AUTO_STORE_MIGRATION_CURRENT_STEP;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.AUTO_STORE_MIGRATION_PAUSE_AFTER_STEP;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.BATCH_JOB_HEARTBEAT_ENABLED;
+import static com.linkedin.venice.controllerapi.ControllerApiConstants.BLOB_STAGING_PATH;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.CLUSTER;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.CLUSTER_DEST;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.COMPRESSION_DICTIONARY;
@@ -908,6 +909,20 @@ public class ControllerClient implements Closeable {
   public ControllerResponse sendPushJobDetails(String storeName, int version, byte[] pushJobDetails) {
     QueryParams params = newParams().add(NAME, storeName).add(VERSION, version);
     return request(ControllerRoute.SEND_PUSH_JOB_DETAILS, params, ControllerResponse.class, pushJobDetails);
+  }
+
+  /**
+   * Notify the controller that blob-based push data is ready for a specific version.
+   * This is called by VPJ after the data writer job completes for PushType.BLOB.
+   *
+   * @param storeName The name of the store
+   * @param version The version number
+   * @param blobStagingPath The HDFS path where SST files are staged
+   * @return ControllerResponse indicating success or error
+   */
+  public ControllerResponse sendBlobPushReadiness(String storeName, int version, String blobStagingPath) {
+    QueryParams params = newParams().add(NAME, storeName).add(VERSION, version).add(BLOB_STAGING_PATH, blobStagingPath);
+    return request(ControllerRoute.SEND_BLOB_PUSH_READINESS, params, ControllerResponse.class);
   }
 
   public MultiStoreResponse queryStoreList() {
