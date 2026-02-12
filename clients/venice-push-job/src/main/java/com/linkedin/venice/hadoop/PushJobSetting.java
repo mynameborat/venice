@@ -174,4 +174,9 @@ public class PushJobSetting implements Serializable {
   public boolean isSortedIngestionEnabled;
   public boolean allowRegularPushWithTTLRepush;
 
+  // Blob-based push settings
+  public boolean blobBasedPush;
+  public String blobStorageUri;
+  public String blobStorageType;
+
 }

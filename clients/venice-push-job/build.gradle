@@ -100,6 +100,7 @@ dependencies {
   implementation libraries.xalan
   implementation libraries.xerces
   implementation libraries.zstd
+  implementation libraries.rocksdbjni
 
   testImplementation project(':internal:venice-common').sourceSets.test.output
 

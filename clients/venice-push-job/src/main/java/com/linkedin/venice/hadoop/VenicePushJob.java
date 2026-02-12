@@ -87,6 +87,10 @@ import com.linkedin.avroutil1.compatibility.AvroCompatibilityHelper;
 import com.linkedin.d2.balancer.D2Client;
 import com.linkedin.venice.PushJobCheckpoints;
 import com.linkedin.venice.annotation.VisibleForTesting;
+import com.linkedin.venice.blobtransfer.storage.BlobStorageClient;
+import com.linkedin.venice.blobtransfer.storage.BlobStoragePaths;
+import com.linkedin.venice.blobtransfer.storage.BlobStorageType;
+import com.linkedin.venice.blobtransfer.storage.LocalFsBlobStorageClient;
 import com.linkedin.venice.compression.CompressionStrategy;
 import com.linkedin.venice.compression.ZstdWithDictCompressor;
 import com.linkedin.venice.controllerapi.ControllerClient;
@@ -142,6 +146,7 @@ import com.linkedin.venice.schema.writecompute.WriteComputeOperation;
 import com.linkedin.venice.security.SSLFactory;
 import com.linkedin.venice.serialization.avro.AvroProtocolDefinition;
 import com.linkedin.venice.serialization.avro.InternalAvroSpecificSerializer;
+import com.linkedin.venice.spark.datawriter.jobs.BlobDataWriterSparkJob;
 import com.linkedin.venice.spark.utils.RmdPushUtils;
 import com.linkedin.venice.status.PushJobDetailsStatus;
 import com.linkedin.venice.status.protocol.PushJobDetails;
@@ -844,6 +849,19 @@ public class VenicePushJob implements AutoCloseable {
         runJobAndUpdateStatus();
         getVeniceWriter(pushJobSetting)
             .broadcastEndOfIncrementalPush(pushJobSetting.incrementalPushVersion, Collections.emptyMap());
+      } else if (pushJobSetting.blobBasedPush) {
+        // Blob-based push path: no VeniceWriter, no SOP/EOP control messages
+        LOGGER.info(
+            "Running blob-based push for store: {}, version: {}",
+            pushJobSetting.storeName,
+            pushJobSetting.version);
+        runJobAndUpdateStatus();
+        writeVersionManifest(pushJobSetting);
+        ControllerResponse blobPushResponse =
+            controllerClient.notifyBlobPushComplete(pushJobSetting.storeName, pushJobSetting.version);
+        if (blobPushResponse.isError()) {
+          throw new VeniceException("Failed to notify blob push completion: " + blobPushResponse.getError());
+        }
       } else {
         // Populate any view configs to job properties
         configureJobPropertiesWithMaterializedViewConfigs();
@@ -2448,6 +2466,14 @@ public class VenicePushJob implements AutoCloseable {
     setting.rmdChunkingEnabled = setting.chunkingEnabled && setting.isRmdChunkingEnabled;
     setting.kafkaSourceRegion = versionCreationResponse.getKafkaSourceRegion();
 
+    setting.blobBasedPush = versionCreationResponse.isBlobBasedPush();
+    setting.blobStorageUri = versionCreationResponse.getBlobStorageUri();
+    setting.blobStorageType = versionCreationResponse.getBlobStorageType();
+
+    if (setting.blobBasedPush) {
+      setting.dataWriterComputeJobClass = BlobDataWriterSparkJob.class;
+    }
+
     if (setting.isSourceKafka) {
       /**
        * Check whether the new version setup is compatible with the source version, and we will check the following configs:
@@ -2563,6 +2589,50 @@ public class VenicePushJob implements AutoCloseable {
     if (veniceWriter != null) {
       veniceWriter.close();
       veniceWriter = null;
+    }
+  }
+
+  /**
+   * Write a simple JSON manifest for a blob-based push version.
+   * The manifest includes store name, version, partition count, and timestamp.
+   */
+  private void writeVersionManifest(PushJobSetting setting) {
+    String manifestContent = "{\"storeName\":\"" + setting.storeName + "\",\"version\":" + setting.version
+        + ",\"partitionCount\":" + setting.partitionCount + ",\"timestamp\":" + System.currentTimeMillis() + "}";
+    String manifestPath = BlobStoragePaths.versionManifest(setting.blobStorageUri, setting.storeName, setting.version);
+
+    try (BlobStorageClient client = createBlobStorageClient(setting.blobStorageType)) {
+      // Write manifest to a temp file, then upload
+      java.io.File tempManifest = java.io.File.createTempFile("venice-manifest-", ".json");
+      try {
+        java.nio.file.Files
+            .write(tempManifest.toPath(), manifestContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        client.upload(tempManifest.getAbsolutePath(), manifestPath);
+        LOGGER.info("Uploaded version manifest to {}", manifestPath);
+      } finally {
+        if (!tempManifest.delete()) {
+          LOGGER.warn("Failed to delete temp manifest file: {}", tempManifest.getAbsolutePath());
+        }
+      }
+    } catch (Exception e) {
+      throw new VeniceException("Failed to write version manifest for blob push", e);
+    }
+  }
+
+  /**
+   * Factory method to create a {@link BlobStorageClient} based on the given type string.
+   */
+  @VisibleForTesting
+  static BlobStorageClient createBlobStorageClient(String blobStorageType) {
+    BlobStorageType type = BlobStorageType.fromString(blobStorageType);
+    switch (type) {
+      case LOCAL_FS:
+        return new LocalFsBlobStorageClient();
+      case HDFS:
+      case S3:
+        throw new VeniceException("BlobStorageClient for type " + type + " is not yet implemented");
+      default:
+        throw new VeniceException("Unknown blob storage type: " + type);
     }
   }
 

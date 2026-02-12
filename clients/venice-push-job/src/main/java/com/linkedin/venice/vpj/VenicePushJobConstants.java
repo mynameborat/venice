@@ -463,4 +463,8 @@ public final class VenicePushJobConstants {
    * propagated to all {@link VenicePushJob} components.
    */
   public static final String NEWER_KME_SCHEMAS_PREFIX = "newer.kme.schemas.prefix.";
+
+  // Blob-based push constants
+  public static final String BLOB_STORAGE_BASE_URI = "blob.storage.base.uri";
+  public static final String BLOB_STORAGE_TYPE = "blob.storage.type";
 }
