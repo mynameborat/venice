@@ -172,6 +172,32 @@ public class BlobPartitionWriterTest {
   }
 
   @Test
+  public void testProcessRows_withPlainTableFormat() throws Exception {
+    DataWriterAccumulators accumulators = new DataWriterAccumulators(spark);
+    String blobBaseUri = tempBlobDir.toAbsolutePath().toString();
+    Properties props = createTestProperties(blobBaseUri);
+    props.setProperty(BLOB_SST_TABLE_FORMAT, "PLAIN_TABLE");
+
+    List<Row> rows = new ArrayList<>();
+    rows.add(createRow(new byte[] { 1, 2, 3 }, new byte[] { 10, 20 }));
+
+    JavaSparkContext jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
+    jsc.parallelize(Collections.singletonList(1), 1).foreachPartition(partition -> {
+      LocalFsBlobStorageClient client = new LocalFsBlobStorageClient();
+      try (BlobPartitionWriter writer = new BlobPartitionWriter(props, accumulators, client)) {
+        writer.processRows(rows.iterator());
+      } finally {
+        client.close();
+      }
+    });
+
+    String expectedPath = BlobStoragePaths.sstFile(blobBaseUri, "test-store", 1, 0, "data_0.sst");
+    File sstFile = new File(expectedPath);
+    Assert.assertTrue(sstFile.exists(), "SST file should exist with PLAIN_TABLE format");
+    Assert.assertTrue(sstFile.length() > 0, "SST file should not be empty");
+  }
+
+  @Test
   public void testProcessRows_defaultsToBlockBasedWhenFormatNotSet() throws Exception {
     DataWriterAccumulators accumulators = new DataWriterAccumulators(spark);
     String blobBaseUri = tempBlobDir.toAbsolutePath().toString();

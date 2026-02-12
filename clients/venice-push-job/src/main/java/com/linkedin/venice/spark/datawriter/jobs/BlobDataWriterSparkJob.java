@@ -35,6 +35,8 @@ public class BlobDataWriterSparkJob extends DataWriterSparkJob {
 
     // Inject blob-specific config into SparkSession conf so it propagates to executors
     // via the broadcast Properties in runComputeJob()
+    // blobStorageUri and blobStorageType are always set for blob-based pushes (from version metadata).
+    // blobSstTableFormat may be null if the controller does not set it; hence the null guard.
     getSparkSession().conf().set(BLOB_STORAGE_BASE_URI, pushJobSetting.blobStorageUri);
     getSparkSession().conf().set(BLOB_STORAGE_TYPE, pushJobSetting.blobStorageType);
     if (pushJobSetting.blobSstTableFormat != null) {

@@ -74,6 +74,8 @@ import com.linkedin.venice.pubsub.api.PubSubTopic;
 import com.linkedin.venice.pubsub.manager.TopicManager;
 import com.linkedin.venice.pubsub.mock.InMemoryPubSubPosition;
 import com.linkedin.venice.pushmonitor.ExecutionStatus;
+import com.linkedin.venice.pushmonitor.PushControlSignal;
+import com.linkedin.venice.pushmonitor.PushControlSignalAccessor;
 import com.linkedin.venice.pushmonitor.PushMonitorDelegator;
 import com.linkedin.venice.pushstatushelper.PushStatusStoreWriter;
 import com.linkedin.venice.stats.dimensions.StoreRepushTriggerSource;
@@ -1789,6 +1791,61 @@ public class TestVeniceHelixAdmin {
     VeniceHelixAdmin.updateStoreTTLRepushFlag(userPushId, store, repository);
     verify(store, never()).setTTLRepushEnabled(anyBoolean());
     verify(repository, never()).updateStore(any());
+  }
+
+  @Test
+  public void testNotifyBlobPushComplete_createsSignalWhenZNodeDoesNotExist() {
+    VeniceHelixAdmin veniceHelixAdmin = mock(VeniceHelixAdmin.class);
+    doCallRealMethod().when(veniceHelixAdmin).notifyBlobPushComplete(anyString(), anyString(), anyInt());
+
+    Store store = mock(Store.class);
+    Version version = mock(Version.class);
+    when(version.isBlobBasedIngestion()).thenReturn(true);
+    doReturn(store).when(veniceHelixAdmin).getStore(clusterName, storeName);
+    doReturn(version).when(store).getVersion(1);
+
+    HelixVeniceClusterResources resources = mock(HelixVeniceClusterResources.class);
+    PushControlSignalAccessor signalAccessor = mock(PushControlSignalAccessor.class);
+    doReturn(resources).when(veniceHelixAdmin).getHelixVeniceClusterResources(clusterName);
+    doReturn(signalAccessor).when(resources).getPushControlSignalAccessor();
+
+    // ZNode doesn't exist — getPushControlSignal returns null
+    String kafkaTopic = Version.composeKafkaTopic(storeName, 1);
+    when(signalAccessor.getPushControlSignal(kafkaTopic)).thenReturn(null);
+
+    veniceHelixAdmin.notifyBlobPushComplete(clusterName, storeName, 1);
+
+    // createPushControlSignal should be called, NOT updatePushControlSignal
+    verify(signalAccessor).createPushControlSignal(any(PushControlSignal.class));
+    verify(signalAccessor, never()).updatePushControlSignal(any(PushControlSignal.class));
+  }
+
+  @Test
+  public void testNotifyBlobPushComplete_updatesSignalWhenZNodeExists() {
+    VeniceHelixAdmin veniceHelixAdmin = mock(VeniceHelixAdmin.class);
+    doCallRealMethod().when(veniceHelixAdmin).notifyBlobPushComplete(anyString(), anyString(), anyInt());
+
+    Store store = mock(Store.class);
+    Version version = mock(Version.class);
+    when(version.isBlobBasedIngestion()).thenReturn(true);
+    doReturn(store).when(veniceHelixAdmin).getStore(clusterName, storeName);
+    doReturn(version).when(store).getVersion(1);
+
+    HelixVeniceClusterResources resources = mock(HelixVeniceClusterResources.class);
+    PushControlSignalAccessor signalAccessor = mock(PushControlSignalAccessor.class);
+    doReturn(resources).when(veniceHelixAdmin).getHelixVeniceClusterResources(clusterName);
+    doReturn(signalAccessor).when(resources).getPushControlSignalAccessor();
+
+    // ZNode exists — getPushControlSignal returns an existing signal
+    String kafkaTopic = Version.composeKafkaTopic(storeName, 1);
+    PushControlSignal existingSignal = new PushControlSignal(kafkaTopic);
+    when(signalAccessor.getPushControlSignal(kafkaTopic)).thenReturn(existingSignal);
+
+    veniceHelixAdmin.notifyBlobPushComplete(clusterName, storeName, 1);
+
+    // updatePushControlSignal should be called, NOT createPushControlSignal
+    verify(signalAccessor).updatePushControlSignal(any(PushControlSignal.class));
+    verify(signalAccessor, never()).createPushControlSignal(any(PushControlSignal.class));
   }
 
 }

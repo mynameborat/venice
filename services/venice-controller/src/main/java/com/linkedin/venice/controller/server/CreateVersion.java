@@ -322,6 +322,8 @@ public class CreateVersion extends AbstractRoute {
       response.setBlobBasedPush(true);
       response.setBlobStorageUri(version.getBlobStorageUri());
       response.setBlobStorageType(version.getBlobStorageType());
+      // Note: blobSstTableFormat is a cluster-level setting, not per-store or per-version.
+      // This assumes all servers in a cluster use the same RocksDB table format (PlainTable or BlockBased).
       response.setBlobSstTableFormat(admin.getControllerConfig(request.getClusterName()).getBlobSstTableFormat());
     }
   }

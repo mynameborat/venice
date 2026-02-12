@@ -1237,7 +1237,7 @@ public class DefaultIngestionBackendTest {
   }
 
   @Test
-  public void testKillConsumptionCancelsBlobIngestionFutures() {
+  public void testKillConsumptionCancelsBlobIngestionFutures() throws Exception {
     // Set up a blob-based version
     when(version.isBlobBasedIngestion()).thenReturn(true);
     when(version.getBlobStorageUri()).thenReturn("/tmp/blob");
@@ -1253,8 +1253,24 @@ public class DefaultIngestionBackendTest {
     // Start blob ingestion — this submits a task and stores its Future
     ingestionBackend.startConsumption(storeConfig, PARTITION, Optional.empty());
 
+    // Access the blobIngestionFutures map via reflection to verify cancellation
+    java.lang.reflect.Field futuresField = DefaultIngestionBackend.class.getDeclaredField("blobIngestionFutures");
+    futuresField.setAccessible(true);
+    @SuppressWarnings("unchecked")
+    java.util.Map<String, java.util.concurrent.Future<?>> futures =
+        (java.util.Map<String, java.util.concurrent.Future<?>>) futuresField.get(ingestionBackend);
+
+    // Before kill: future should be present for the replica
+    String replicaId = Utils.getReplicaId(STORE_VERSION, PARTITION);
+    Assert.assertNotNull(futures.get(replicaId), "Future should exist before killConsumptionTask");
+    java.util.concurrent.Future<?> capturedFuture = futures.get(replicaId);
+
     // Kill should cancel blob ingestion futures and delegate to ingestion service
     ingestionBackend.killConsumptionTask(STORE_VERSION);
     verify(storeIngestionService).killConsumptionTask(STORE_VERSION);
+
+    // After kill: future should be removed from map and cancelled
+    Assert.assertNull(futures.get(replicaId), "Future should be removed after killConsumptionTask");
+    Assert.assertTrue(capturedFuture.isCancelled(), "Future should be cancelled after killConsumptionTask");
   }
 }

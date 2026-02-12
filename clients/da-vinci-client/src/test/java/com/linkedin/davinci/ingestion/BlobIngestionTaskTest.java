@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertFalse;
 
 import com.linkedin.davinci.config.VeniceServerConfig;
 import com.linkedin.davinci.config.VeniceStoreVersionConfig;
@@ -123,6 +124,7 @@ public class BlobIngestionTaskTest {
     }
 
     waitThread.join(5000);
+    assertFalse(waitThread.isAlive(), "waitThread should have completed after watcher fired");
 
     verify(pushControlSignalAccessor).subscribePushControlSignalChange(eq(KAFKA_TOPIC), any(IZkDataListener.class));
     verify(pushControlSignalAccessor).unsubscribePushControlSignalChange(eq(KAFKA_TOPIC), any(IZkDataListener.class));
@@ -148,6 +150,7 @@ public class BlobIngestionTaskTest {
     Thread.sleep(50);
     waitThread.interrupt();
     waitThread.join(5000);
+    assertFalse(waitThread.isAlive(), "waitThread should have completed after interrupt");
 
     // Should always unsubscribe, even on interruption
     verify(pushControlSignalAccessor).subscribePushControlSignalChange(eq(KAFKA_TOPIC), any(IZkDataListener.class));

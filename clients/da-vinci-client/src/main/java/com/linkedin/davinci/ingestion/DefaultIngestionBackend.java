@@ -676,7 +676,7 @@ public class DefaultIngestionBackend implements IngestionBackend {
 
   private void cancelBlobIngestionFuturesForTopic(String topicName) {
     blobIngestionFutures.entrySet().removeIf(entry -> {
-      if (entry.getKey().startsWith(topicName)) {
+      if (entry.getKey().startsWith(topicName + "-")) {
         LOGGER.info("Cancelling blob ingestion task for replica {}", entry.getKey());
         entry.getValue().cancel(true);
         return true;
