@@ -111,6 +111,8 @@ public enum ControllerRoute implements VeniceDimensionInterface {
   EMPTY_PUSH("/empty_push", HttpMethod.POST, Arrays.asList(NAME, PUSH_JOB_ID)),
   // Write an END_OF_PUSH message into the topic
   END_OF_PUSH("/end_of_push", HttpMethod.POST, Arrays.asList(NAME, VERSION)),
+  // Notify controller that blob push upload is complete
+  BLOB_PUSH_COMPLETE("/blob_push_complete", HttpMethod.POST, Arrays.asList(NAME, VERSION)),
   // Get all information about that store
   STORE("/store", HttpMethod.GET, Collections.singletonList(NAME)),
   NEW_STORE(

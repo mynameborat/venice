@@ -32,7 +32,8 @@ public class PushControlSignal {
       @JsonProperty("kafkaTopic") String kafkaTopic,
       @JsonProperty("signals") Map<PushControlSignalType, Long> signals) {
     this.kafkaTopic = kafkaTopic;
-    this.signals = signals == null ? new EnumMap<>(PushControlSignalType.class) : new EnumMap<>(signals);
+    this.signals =
+        (signals == null || signals.isEmpty()) ? new EnumMap<>(PushControlSignalType.class) : new EnumMap<>(signals);
   }
 
   public String getKafkaTopic() {

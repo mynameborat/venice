@@ -22,6 +22,7 @@ import com.linkedin.venice.helix.HelixStatusMessageChannel;
 import com.linkedin.venice.helix.SafeHelixManager;
 import com.linkedin.venice.helix.StoragePersonaRepository;
 import com.linkedin.venice.helix.VeniceOfflinePushMonitorAccessor;
+import com.linkedin.venice.helix.VenicePushControlSignalAccessor;
 import com.linkedin.venice.helix.ZkRoutersClusterManager;
 import com.linkedin.venice.helix.ZkStoreConfigAccessor;
 import com.linkedin.venice.ingestion.control.RealTimeTopicSwitcher;
@@ -32,6 +33,7 @@ import com.linkedin.venice.meta.StoreConfig;
 import com.linkedin.venice.pushmonitor.AggPushHealthStats;
 import com.linkedin.venice.pushmonitor.AggPushStatusCleanUpStats;
 import com.linkedin.venice.pushmonitor.LeakedPushStatusCleanUpService;
+import com.linkedin.venice.pushmonitor.PushControlSignalAccessor;
 import com.linkedin.venice.pushmonitor.PushMonitorDelegator;
 import com.linkedin.venice.stats.HelixMessageChannelStats;
 import com.linkedin.venice.system.store.MetaStoreWriter;
@@ -78,6 +80,7 @@ public class HelixVeniceClusterResources implements VeniceResource {
   private final Optional<DynamicAccessController> accessController;
   private final ExecutorService errorPartitionResetExecutorService = Executors.newSingleThreadExecutor();
   private final StoragePersonaRepository storagePersonaRepository;
+  private final PushControlSignalAccessor pushControlSignalAccessor;
   private ErrorPartitionResetTask errorPartitionResetTask = null;
   private final ExecutorService deadStoreStatsPreFetchService = Executors.newSingleThreadExecutor();
   private DeadStoreStatsPreFetchTask deadStoreStatsPreFetchTask = null;
@@ -175,6 +178,7 @@ public class HelixVeniceClusterResources implements VeniceResource {
         adapterSerializer,
         config.getLogContext(),
         config.getRefreshAttemptsForZkReconnect());
+    this.pushControlSignalAccessor = new VenicePushControlSignalAccessor(clusterName, zkClient, adapterSerializer);
     String aggregateRealTimeSourceKafkaUrl =
         config.getChildDataCenterKafkaUrlMap().get(config.getAggregateRealTimeSourceRegion());
     boolean unregisterMetricEnabled = config.isUnregisterMetricForDeletedStoreEnabled();
@@ -560,6 +564,10 @@ public class HelixVeniceClusterResources implements VeniceResource {
 
   public StoragePersonaRepository getStoragePersonaRepository() {
     return storagePersonaRepository;
+  }
+
+  public PushControlSignalAccessor getPushControlSignalAccessor() {
+    return pushControlSignalAccessor;
   }
 
   public Optional<MultiTaskSchedulerService> getMultiTaskSchedulerService() {

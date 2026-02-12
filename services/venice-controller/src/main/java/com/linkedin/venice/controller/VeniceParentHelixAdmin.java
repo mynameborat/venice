@@ -5225,6 +5225,11 @@ public class VeniceParentHelixAdmin implements Admin {
   }
 
   @Override
+  public void notifyBlobPushComplete(String clusterName, String storeName, int versionNumber) {
+    getVeniceHelixAdmin().notifyBlobPushComplete(clusterName, storeName, versionNumber);
+  }
+
+  @Override
   public boolean whetherEnableBatchPushFromAdmin(String clusterName, String storeName) {
     /**
      * Batch push to Parent Cluster is always enabled.

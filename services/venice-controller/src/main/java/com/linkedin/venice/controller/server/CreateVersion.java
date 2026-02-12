@@ -22,6 +22,7 @@ import static com.linkedin.venice.controllerapi.ControllerApiConstants.SOURCE_GR
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.TARGETED_REGIONS;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.VERSION;
 import static com.linkedin.venice.controllerapi.ControllerRoute.ADD_VERSION;
+import static com.linkedin.venice.controllerapi.ControllerRoute.BLOB_PUSH_COMPLETE;
 import static com.linkedin.venice.controllerapi.ControllerRoute.EMPTY_PUSH;
 import static com.linkedin.venice.controllerapi.ControllerRoute.END_OF_PUSH;
 import static com.linkedin.venice.controllerapi.ControllerRoute.OFFLINE_PUSH_INFO;
@@ -737,6 +738,43 @@ public class CreateVersion extends AbstractRoute {
         responseObject.setName(storeName);
 
         admin.writeEndOfPush(clusterName, storeName, versionNumber, false);
+
+      } catch (Throwable e) {
+        responseObject.setError(e);
+        AdminSparkServer.handleError(e, request, response);
+      }
+      return AdminSparkServer.OBJECT_MAPPER.writeValueAsString(responseObject);
+    };
+  }
+
+  /**
+   * @see Admin#notifyBlobPushComplete(String, String, int)
+   */
+  public Route notifyBlobPushComplete(Admin admin) {
+    return (request, response) -> {
+      ControllerResponse responseObject = new ControllerResponse();
+      response.type(HttpConstants.JSON);
+      try {
+        // Also allow allowlist users to run this command
+        if (!isAllowListUser(request) && !hasWriteAccessToTopic(request)) {
+          response.status(HttpStatus.SC_FORBIDDEN);
+          responseObject
+              .setError("You don't have permission to notify blob push complete; please grant write ACL for yourself.");
+          responseObject.setErrorType(ErrorType.BAD_REQUEST);
+          return AdminSparkServer.OBJECT_MAPPER.writeValueAsString(responseObject);
+        }
+        AdminSparkServer.validateParams(request, BLOB_PUSH_COMPLETE.getParams(), admin);
+
+        // Query params
+        String clusterName = request.queryParams(CLUSTER);
+        String storeName = request.queryParams(NAME);
+        String versionString = request.queryParams(VERSION);
+        int versionNumber = Integer.parseInt(versionString);
+
+        responseObject.setCluster(clusterName);
+        responseObject.setName(storeName);
+
+        admin.notifyBlobPushComplete(clusterName, storeName, versionNumber);
 
       } catch (Throwable e) {
         responseObject.setError(e);

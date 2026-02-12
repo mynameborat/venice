@@ -20,6 +20,7 @@ import static com.linkedin.venice.controllerapi.ControllerApiConstants.SEPARATE_
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.SOURCE_GRID_FABRIC;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.STORE_SIZE;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.TARGETED_REGIONS;
+import static com.linkedin.venice.controllerapi.ControllerApiConstants.VERSION;
 import static com.linkedin.venice.controllerapi.ControllerRoute.REQUEST_TOPIC;
 import static com.linkedin.venice.meta.BufferReplayPolicy.REWIND_FROM_EOP;
 import static com.linkedin.venice.meta.Version.PushType.BATCH;
@@ -54,6 +55,7 @@ import com.linkedin.venice.acl.NoOpDynamicAccessController;
 import com.linkedin.venice.compression.CompressionStrategy;
 import com.linkedin.venice.controller.Admin;
 import com.linkedin.venice.controller.VeniceControllerClusterConfig;
+import com.linkedin.venice.controllerapi.ControllerResponse;
 import com.linkedin.venice.controllerapi.RequestTopicForPushRequest;
 import com.linkedin.venice.controllerapi.VersionCreationResponse;
 import com.linkedin.venice.exceptions.VeniceException;
@@ -1356,5 +1358,50 @@ public class CreateVersionTest {
 
     // SOP and EOP should NOT be written
     verify(admin, never()).writeEndOfPush(any(), any(), anyInt(), anyBoolean());
+  }
+
+  @Test
+  public void testNotifyBlobPushComplete_success() throws Exception {
+    CreateVersion createVersion = new CreateVersion(true, Optional.of(accessClient), false);
+    Route notifyRoute = createVersion.notifyBlobPushComplete(admin);
+
+    doCallRealMethod().when(request).queryParamOrDefault(any(), any());
+    doReturn(true).when(accessClient).isAllowlistUsers(certificate, STORE_NAME, HTTP_GET);
+    doReturn(CLUSTER_NAME).when(request).queryParams(CLUSTER);
+    doReturn(STORE_NAME).when(request).queryParams(NAME);
+    doReturn("3").when(request).queryParams(VERSION);
+
+    Object result = notifyRoute.handle(request, response);
+    assertNotNull(result);
+
+    ControllerResponse controllerResponse = OBJECT_MAPPER.readValue(result.toString(), ControllerResponse.class);
+    assertFalse(controllerResponse.isError());
+    assertEquals(controllerResponse.getCluster(), CLUSTER_NAME);
+    assertEquals(controllerResponse.getName(), STORE_NAME);
+    verify(admin).notifyBlobPushComplete(CLUSTER_NAME, STORE_NAME, 3);
+  }
+
+  @Test
+  public void testNotifyBlobPushComplete_nonBlobVersion() throws Exception {
+    CreateVersion createVersion = new CreateVersion(true, Optional.of(accessClient), false);
+    Route notifyRoute = createVersion.notifyBlobPushComplete(admin);
+
+    doCallRealMethod().when(request).queryParamOrDefault(any(), any());
+    doReturn(true).when(accessClient).isAllowlistUsers(certificate, STORE_NAME, HTTP_GET);
+    doReturn(CLUSTER_NAME).when(request).queryParams(CLUSTER);
+    doReturn(STORE_NAME).when(request).queryParams(NAME);
+    doReturn("3").when(request).queryParams(VERSION);
+
+    VeniceHttpException ex = new VeniceHttpException(
+        HttpStatus.SC_BAD_REQUEST,
+        "Version 3 of store " + STORE_NAME + " is not a blob-based ingestion version.");
+    doThrow(ex).when(admin).notifyBlobPushComplete(CLUSTER_NAME, STORE_NAME, 3);
+
+    Object result = notifyRoute.handle(request, response);
+    assertNotNull(result);
+
+    ControllerResponse controllerResponse = OBJECT_MAPPER.readValue(result.toString(), ControllerResponse.class);
+    assertTrue(controllerResponse.isError());
+    verify(response).status(HttpStatus.SC_BAD_REQUEST);
   }
 }

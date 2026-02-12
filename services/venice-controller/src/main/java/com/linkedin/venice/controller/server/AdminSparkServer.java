@@ -10,6 +10,7 @@ import static com.linkedin.venice.controllerapi.ControllerRoute.ALLOW_LIST_ADD_N
 import static com.linkedin.venice.controllerapi.ControllerRoute.ALLOW_LIST_REMOVE_NODE;
 import static com.linkedin.venice.controllerapi.ControllerRoute.AUTO_MIGRATE_STORE;
 import static com.linkedin.venice.controllerapi.ControllerRoute.BACKUP_VERSION;
+import static com.linkedin.venice.controllerapi.ControllerRoute.BLOB_PUSH_COMPLETE;
 import static com.linkedin.venice.controllerapi.ControllerRoute.CHECK_RESOURCE_CLEANUP_FOR_STORE_CREATION;
 import static com.linkedin.venice.controllerapi.ControllerRoute.CLEANUP_INSTANCE_CUSTOMIZED_STATES;
 import static com.linkedin.venice.controllerapi.ControllerRoute.CLEAN_EXECUTION_IDS;
@@ -379,6 +380,9 @@ public class AdminSparkServer extends AbstractVeniceService {
     httpService.post(
         END_OF_PUSH.getPath(),
         new VeniceParentControllerRegionStateHandler(admin, createVersion.writeEndOfPush(admin)));
+    httpService.post(
+        BLOB_PUSH_COMPLETE.getPath(),
+        new VeniceParentControllerRegionStateHandler(admin, createVersion.notifyBlobPushComplete(admin)));
     httpService.post(
         REQUEST_TOPIC.getPath(),
         new VeniceParentControllerRegionStateHandler(admin, createVersion.requestTopicForPushing(admin)));

@@ -471,6 +471,11 @@ public class ControllerClient implements Closeable {
     return request(ControllerRoute.END_OF_PUSH, params, ControllerResponse.class);
   }
 
+  public ControllerResponse notifyBlobPushComplete(String storeName, int version) {
+    QueryParams params = newParams().add(NAME, storeName).add(VERSION, version);
+    return request(ControllerRoute.BLOB_PUSH_COMPLETE, params, ControllerResponse.class);
+  }
+
   /**
    * Sends and empty push to the venice controller, but verifies that the push has succeeded before
    * returning to the caller.

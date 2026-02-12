@@ -200,6 +200,9 @@ import com.linkedin.venice.pushmonitor.ExecutionStatus;
 import com.linkedin.venice.pushmonitor.ExecutionStatusWithDetails;
 import com.linkedin.venice.pushmonitor.KillOfflinePushMessage;
 import com.linkedin.venice.pushmonitor.OfflinePushStatus;
+import com.linkedin.venice.pushmonitor.PushControlSignal;
+import com.linkedin.venice.pushmonitor.PushControlSignalAccessor;
+import com.linkedin.venice.pushmonitor.PushControlSignalType;
 import com.linkedin.venice.pushmonitor.PushMonitor;
 import com.linkedin.venice.pushmonitor.PushMonitorDelegator;
 import com.linkedin.venice.pushmonitor.PushMonitorUtils;
@@ -1786,6 +1789,40 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
     }
   }
 
+  @Override
+  public void notifyBlobPushComplete(String clusterName, String storeName, int versionNumber) {
+    Store store = getStore(clusterName, storeName);
+    if (store == null) {
+      throw new VeniceNoStoreException(storeName);
+    }
+
+    Version version = store.getVersion(versionNumber);
+    if (version == null) {
+      throw new VeniceHttpException(
+          HttpStatus.SC_NOT_FOUND,
+          "Version " + versionNumber + " was not found for Store " + storeName
+              + ". Cannot notify blob push complete for version that does not exist");
+    }
+
+    if (!version.isBlobBasedIngestion()) {
+      throw new VeniceHttpException(
+          HttpStatus.SC_BAD_REQUEST,
+          "Version " + versionNumber + " of store " + storeName
+              + " is not a blob-based ingestion version. Cannot notify blob push complete.");
+    }
+
+    String kafkaTopic = Version.composeKafkaTopic(storeName, versionNumber);
+    PushControlSignalAccessor signalAccessor =
+        getHelixVeniceClusterResources(clusterName).getPushControlSignalAccessor();
+    PushControlSignal signal = signalAccessor.getPushControlSignal(kafkaTopic);
+    if (signal == null) {
+      signal = new PushControlSignal(kafkaTopic);
+    }
+    signal.emitSignal(PushControlSignalType.BLOB_UPLOAD_COMPLETE);
+    signalAccessor.updatePushControlSignal(signal);
+    LOGGER.info("Notified blob push complete for topic: {} in cluster: {}.", kafkaTopic, clusterName);
+  }
+
   /**
    * Test if a store is allowed for a batch push.
    * @param storeName name of a store.
@@ -3304,6 +3341,12 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
                   BlobStoragePaths.versionDir(clusterConfig.getBlobStorageBaseUri(), storeName, version.getNumber()));
               version.setBlobStorageType(clusterConfig.getBlobStorageType());
               repository.updateStore(store);
+
+              // Create the PushControlSignal ZK node so servers can subscribe before VPJ calls completion
+              PushControlSignalAccessor signalAccessor =
+                  getHelixVeniceClusterResources(clusterName).getPushControlSignalAccessor();
+              signalAccessor.createPushControlSignal(
+                  new PushControlSignal(Version.composeKafkaTopic(storeName, version.getNumber())));
             }
 
             if (isRealTimeTopicRequired(store, version)) {
