@@ -59,11 +59,12 @@ public interface Version extends Comparable<Version>, DataModelBackedStructure<S
     BATCH(0), // Batch jobs will create a new version topic and write to it in a batch manner.
     STREAM_REPROCESSING(1), // Reprocessing jobs will create a new version topic and a reprocessing topic.
     STREAM(2), // Stream jobs will write to a buffer or RT topic.
-    INCREMENTAL(3); // Incremental jobs will re-use an existing version topic and write on top of it.
+    INCREMENTAL(3), // Incremental jobs will re-use an existing version topic and write on top of it.
+    BATCH_BLOB(4); // Batch blob jobs write SST files to blob storage instead of Kafka.
 
     private final int value;
-    private static final Map<Integer, PushType> VALUE_TO_TYPE_MAP = new HashMap<>(4);
-    private static final Map<String, PushType> NAME_TO_TYPE_MAP = new HashMap<>(4);
+    private static final Map<Integer, PushType> VALUE_TO_TYPE_MAP = new HashMap<>(5);
+    private static final Map<String, PushType> NAME_TO_TYPE_MAP = new HashMap<>(5);
 
     // Static initializer for map population
     static {
@@ -93,8 +94,16 @@ public interface Version extends Comparable<Version>, DataModelBackedStructure<S
       return this == STREAM_REPROCESSING;
     }
 
+    public boolean isBatchBlob() {
+      return this == BATCH_BLOB;
+    }
+
     public boolean isBatchOrStreamReprocessing() {
       return this == BATCH || this == STREAM_REPROCESSING;
+    }
+
+    public boolean isBatchOrBatchBlob() {
+      return this == BATCH || this == BATCH_BLOB;
     }
 
     /**
@@ -225,6 +234,18 @@ public interface Version extends Comparable<Version>, DataModelBackedStructure<S
   String getBlobTransferInServerEnabled();
 
   void setBlobTransferInServerEnabled(String blobTransferInServerEnabled);
+
+  boolean isBlobBasedIngestion();
+
+  void setBlobBasedIngestion(boolean blobBasedIngestion);
+
+  String getBlobStorageUri();
+
+  void setBlobStorageUri(String uri);
+
+  String getBlobStorageType();
+
+  void setBlobStorageType(String type);
 
   boolean isUseVersionLevelIncrementalPushEnabled();
 

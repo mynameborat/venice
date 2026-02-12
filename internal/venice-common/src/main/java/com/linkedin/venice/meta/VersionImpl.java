@@ -301,6 +301,36 @@ public class VersionImpl implements Version {
   }
 
   @Override
+  public boolean isBlobBasedIngestion() {
+    return this.storeVersion.blobBasedIngestion;
+  }
+
+  @Override
+  public void setBlobBasedIngestion(boolean blobBasedIngestion) {
+    this.storeVersion.blobBasedIngestion = blobBasedIngestion;
+  }
+
+  @Override
+  public String getBlobStorageUri() {
+    return this.storeVersion.blobStorageUri.toString();
+  }
+
+  @Override
+  public void setBlobStorageUri(String uri) {
+    this.storeVersion.blobStorageUri = uri;
+  }
+
+  @Override
+  public String getBlobStorageType() {
+    return this.storeVersion.blobStorageType.toString();
+  }
+
+  @Override
+  public void setBlobStorageType(String type) {
+    this.storeVersion.blobStorageType = type;
+  }
+
+  @Override
   public boolean isUseVersionLevelIncrementalPushEnabled() {
     return this.storeVersion.useVersionLevelIncrementalPushEnabled;
   }
@@ -568,6 +598,9 @@ public class VersionImpl implements Version {
     clonedVersion.setKeyUrnCompressionEnabled(isKeyUrnCompressionEnabled());
     clonedVersion.setKeyUrnFields(getKeyUrnFields());
     clonedVersion.setRepushTtlSeconds(getRepushTtlSeconds());
+    clonedVersion.setBlobBasedIngestion(isBlobBasedIngestion());
+    clonedVersion.setBlobStorageUri(getBlobStorageUri());
+    clonedVersion.setBlobStorageType(getBlobStorageType());
     return clonedVersion;
   }
 

@@ -539,6 +539,36 @@ public class ReadOnlyStore implements Store {
     }
 
     @Override
+    public boolean isBlobBasedIngestion() {
+      return this.delegate.isBlobBasedIngestion();
+    }
+
+    @Override
+    public void setBlobBasedIngestion(boolean blobBasedIngestion) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String getBlobStorageUri() {
+      return this.delegate.getBlobStorageUri();
+    }
+
+    @Override
+    public void setBlobStorageUri(String uri) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String getBlobStorageType() {
+      return this.delegate.getBlobStorageType();
+    }
+
+    @Override
+    public void setBlobStorageType(String type) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
     public boolean isUseVersionLevelIncrementalPushEnabled() {
       return this.delegate.isUseVersionLevelIncrementalPushEnabled();
     }
@@ -1931,6 +1961,9 @@ public class ReadOnlyStore implements Store {
     storeVersion.setKeyUrnCompressionEnabled(version.isKeyUrnCompressionEnabled());
     storeVersion.setKeyUrnFields(version.getKeyUrnFields().stream().map(String::toString).collect(Collectors.toList()));
     storeVersion.setRepushTtlSeconds(version.getRepushTtlSeconds());
+    storeVersion.setBlobBasedIngestion(version.isBlobBasedIngestion());
+    storeVersion.setBlobStorageUri(version.getBlobStorageUri());
+    storeVersion.setBlobStorageType(version.getBlobStorageType());
 
     return storeVersion;
   }

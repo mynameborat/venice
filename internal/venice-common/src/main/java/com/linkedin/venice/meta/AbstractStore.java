@@ -164,6 +164,7 @@ public abstract class AbstractStore implements Store {
 
       version.setBlobTransferEnabled(isBlobTransferEnabled());
       version.setBlobTransferInServerEnabled(getBlobTransferInServerEnabled());
+      version.setBlobBasedIngestion(isBlobBasedIngestionEnabled());
 
       version.setUseVersionLevelIncrementalPushEnabled(true);
 

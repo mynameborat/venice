@@ -2054,6 +2054,7 @@ public class VeniceParentHelixAdmin implements Admin {
     addVersion.repushSourceVersion = repushSourceVersion;
     addVersion.currentRTVersionNumber = largestUsedRTVersion;
     addVersion.repushTtlSeconds = version.getRepushTtlSeconds();
+    addVersion.blobBasedIngestion = version.isBlobBasedIngestion();
     return addVersion;
   }
 

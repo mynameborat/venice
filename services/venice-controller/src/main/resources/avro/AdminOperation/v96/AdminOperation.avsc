@@ -943,6 +943,12 @@
               "type": "int",
               "doc": "For store version created from repush, indicates the time-to-live in seconds set during the repush",
               "default": -1
+            },
+            {
+              "name": "blobBasedIngestion",
+              "doc": "Whether this version uses blob-based ingestion",
+              "type": "boolean",
+              "default": false
             }
           ]
         },

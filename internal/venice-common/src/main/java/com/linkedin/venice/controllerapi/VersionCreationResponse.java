@@ -29,6 +29,10 @@ public class VersionCreationResponse extends VersionResponse {
 
   private String kafkaSourceRegion = null;
 
+  private boolean blobBasedPush = false;
+  private String blobStorageUri = null;
+  private String blobStorageType = null;
+
   public void setPartitions(int partitions) {
     this.partitions = partitions;
   }
@@ -117,6 +121,30 @@ public class VersionCreationResponse extends VersionResponse {
     return this.daVinciPushStatusStoreEnabled;
   }
 
+  public boolean isBlobBasedPush() {
+    return blobBasedPush;
+  }
+
+  public void setBlobBasedPush(boolean blobBasedPush) {
+    this.blobBasedPush = blobBasedPush;
+  }
+
+  public String getBlobStorageUri() {
+    return blobStorageUri;
+  }
+
+  public void setBlobStorageUri(String blobStorageUri) {
+    this.blobStorageUri = blobStorageUri;
+  }
+
+  public String getBlobStorageType() {
+    return blobStorageType;
+  }
+
+  public void setBlobStorageType(String blobStorageType) {
+    this.blobStorageType = blobStorageType;
+  }
+
   @JsonIgnore
   public String toString() {
     return VersionCreationResponse.class.getSimpleName() + "(partitions: " + partitions + ", replicas: " + replicas
@@ -124,6 +152,7 @@ public class VersionCreationResponse extends VersionResponse {
         + kafkaSourceRegion + ", enableSSL: " + enableSSL + ", compressionStrategy: " + compressionStrategy.toString()
         + ", partitionerClass: " + partitionerClass + ", partitionerParams: " + partitionerParams
         + ", amplificationFactor: " + amplificationFactor + ", daVinciPushStatusStoreEnabled: "
-        + daVinciPushStatusStoreEnabled + ", super: " + super.toString() + ")";
+        + daVinciPushStatusStoreEnabled + ", blobBasedPush: " + blobBasedPush + ", blobStorageUri: " + blobStorageUri
+        + ", blobStorageType: " + blobStorageType + ", super: " + super.toString() + ")";
   }
 }
