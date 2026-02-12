@@ -102,6 +102,20 @@ public class TestStoreInfo {
   }
 
   @Test
+  public void testBlobBasedIngestionEnabled() {
+    StoreInfo storeInfo = new StoreInfo();
+    // check default value
+    assertFalse(storeInfo.isBlobBasedIngestionEnabled());
+    // setting value
+    storeInfo.setBlobBasedIngestionEnabled(true);
+    // check updated value
+    assertTrue(storeInfo.isBlobBasedIngestionEnabled());
+    // toggle back
+    storeInfo.setBlobBasedIngestionEnabled(false);
+    assertFalse(storeInfo.isBlobBasedIngestionEnabled());
+  }
+
+  @Test
   public void testFlinkVeniceViewsEnabled() {
     StoreInfo storeInfo = new StoreInfo();
     // check default value

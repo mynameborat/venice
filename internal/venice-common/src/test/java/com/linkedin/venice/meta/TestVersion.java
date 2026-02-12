@@ -334,6 +334,7 @@ public class TestVersion {
     assertEquals(PushType.extractPushType("STREAM_REPROCESSING"), PushType.STREAM_REPROCESSING);
     assertEquals(PushType.extractPushType("STREAM"), PushType.STREAM);
     assertEquals(PushType.extractPushType("INCREMENTAL"), PushType.INCREMENTAL);
+    assertEquals(PushType.extractPushType("BATCH_BLOB"), PushType.BATCH_BLOB);
 
     // Case 2: Invalid push type
     String invalidType = "INVALID_TYPE";
@@ -382,6 +383,52 @@ public class TestVersion {
     assertEquals(PushType.valueOf(0), PushType.BATCH);
 
     // Case 5: Edge case - Valid maximum value
-    assertEquals(PushType.valueOf(3), PushType.INCREMENTAL);
+    assertEquals(PushType.valueOf(4), PushType.BATCH_BLOB);
+  }
+
+  @Test
+  public void testPushTypeBooleanMethods() {
+    // BATCH_BLOB
+    assertTrue(PushType.BATCH_BLOB.isBatchBlob());
+    assertTrue(PushType.BATCH_BLOB.isBatchOrBatchBlob());
+    assertFalse(PushType.BATCH_BLOB.isBatch());
+    assertFalse(PushType.BATCH_BLOB.isIncremental());
+    assertFalse(PushType.BATCH_BLOB.isStreamReprocessing());
+
+    // BATCH
+    assertFalse(PushType.BATCH.isBatchBlob());
+    assertTrue(PushType.BATCH.isBatchOrBatchBlob());
+    assertTrue(PushType.BATCH.isBatch());
+
+    // Others should not be batch blob
+    assertFalse(PushType.STREAM.isBatchBlob());
+    assertFalse(PushType.INCREMENTAL.isBatchBlob());
+    assertFalse(PushType.STREAM_REPROCESSING.isBatchBlob());
+  }
+
+  @Test
+  public void testVersionBlobFields() {
+    Version version = new VersionImpl("testStore", 1, "pushJob1", 10);
+
+    // defaults
+    assertFalse(version.isBlobBasedIngestion());
+    assertEquals(version.getBlobStorageUri(), "");
+    assertEquals(version.getBlobStorageType(), "");
+
+    // set and verify
+    version.setBlobBasedIngestion(true);
+    assertTrue(version.isBlobBasedIngestion());
+
+    version.setBlobStorageUri("hdfs:///venice/blob/testStore/v1");
+    assertEquals(version.getBlobStorageUri(), "hdfs:///venice/blob/testStore/v1");
+
+    version.setBlobStorageType("HDFS");
+    assertEquals(version.getBlobStorageType(), "HDFS");
+
+    // clone preserves blob fields
+    Version cloned = version.cloneVersion();
+    assertTrue(cloned.isBlobBasedIngestion());
+    assertEquals(cloned.getBlobStorageUri(), "hdfs:///venice/blob/testStore/v1");
+    assertEquals(cloned.getBlobStorageType(), "HDFS");
   }
 }

@@ -1107,6 +1107,7 @@ public class AdminConsumptionTaskTest {
     setStore.bootstrapToOnlineTimeoutInHours = bootstrapToOnlineTimeoutInHours;
     setStore.storeLifecycleHooks = Collections.emptyList();
     setStore.blobTransferInServerEnabled = ConfigCommonUtils.ActivationState.ENABLED.name();
+    setStore.blobBasedIngestionEnabled = true;
     setStore.blobDbEnabled = "NOT_SPECIFIED";
     setStore.keyUrnFields = Collections.emptyList();
 
@@ -1189,6 +1190,7 @@ public class AdminConsumptionTaskTest {
                 && updateStoreQueryParams.getReadComputationEnabled().get() == computationEnabled
                 && updateStoreQueryParams.getBootstrapToOnlineTimeoutInHours().get() == bootstrapToOnlineTimeoutInHours
                 && updateStoreQueryParams.getIncrementalPushEnabled().get() // Incremental push must be enabled.
+                && updateStoreQueryParams.getBlobBasedIngestionEnabled().get() // Blob based ingestion must be enabled.
         ));
   }
 

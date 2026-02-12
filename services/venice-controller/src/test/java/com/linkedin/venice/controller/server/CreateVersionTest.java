@@ -1145,6 +1145,118 @@ public class CreateVersionTest {
   }
 
   @Test
+  public void testHandleNonStreamPushTypePopulatesBlobFields() {
+    String clusterName = "testCluster";
+    String storeName = "testStore";
+    String pushJobId = "pushJob123";
+    int versionNumber = 11;
+    Version.PushType pushType = BATCH;
+    int computedPartitionCount = 10;
+    Admin admin = mock(Admin.class);
+    Store store = mock(Store.class);
+    RequestTopicForPushRequest request = new RequestTopicForPushRequest(clusterName, storeName, pushType, pushJobId);
+    VersionCreationResponse response = new VersionCreationResponse();
+    CreateVersion createVersion = new CreateVersion(true, Optional.of(accessClient), false);
+    Lazy<Boolean> isActiveActiveReplicationEnabledInAllRegions = Lazy.of(() -> true);
+
+    when(admin.whetherEnableBatchPushFromAdmin(clusterName, storeName)).thenReturn(true);
+    when(admin.calculateNumberOfPartitions(clusterName, storeName)).thenReturn(computedPartitionCount);
+
+    Version version = mock(Version.class);
+    when(version.getStoreName()).thenReturn(storeName);
+    when(version.getPartitionCount()).thenReturn(computedPartitionCount);
+    when(version.getNumber()).thenReturn(versionNumber);
+    when(version.kafkaTopicName()).thenReturn("testStore_v11");
+    // Simulate a blob-based ingestion version
+    when(version.isBlobBasedIngestion()).thenReturn(true);
+    when(version.getBlobStorageUri()).thenReturn("hdfs:///venice/blob/testStore/v11");
+    when(version.getBlobStorageType()).thenReturn("HDFS");
+
+    when(
+        admin.incrementVersionIdempotent(
+            clusterName,
+            storeName,
+            request.getPushJobId(),
+            computedPartitionCount,
+            response.getReplicas(),
+            pushType,
+            request.isSendStartOfPush(),
+            request.isSorted(),
+            request.getCompressionDictionary(),
+            Optional.ofNullable(request.getSourceGridFabric()),
+            Optional.ofNullable(request.getCertificateInRequest()),
+            request.getRewindTimeInSecondsOverride(),
+            Optional.ofNullable(request.getEmergencySourceRegion()),
+            request.isDeferVersionSwap(),
+            request.getTargetedRegions(),
+            request.getRepushSourceVersion(),
+            request.getRepushTtlSeconds())).thenReturn(version);
+
+    createVersion
+        .handleNonStreamPushType(admin, store, request, response, isActiveActiveReplicationEnabledInAllRegions);
+
+    // Verify blob fields are populated
+    assertTrue(response.isBlobBasedPush(), "Expected blobBasedPush to be true");
+    assertEquals(response.getBlobStorageUri(), "hdfs:///venice/blob/testStore/v11");
+    assertEquals(response.getBlobStorageType(), "HDFS");
+  }
+
+  @Test
+  public void testHandleNonStreamPushTypeNoBlobFieldsForNormalPush() {
+    String clusterName = "testCluster";
+    String storeName = "testStore";
+    String pushJobId = "pushJob123";
+    int versionNumber = 11;
+    Version.PushType pushType = BATCH;
+    int computedPartitionCount = 10;
+    Admin admin = mock(Admin.class);
+    Store store = mock(Store.class);
+    RequestTopicForPushRequest request = new RequestTopicForPushRequest(clusterName, storeName, pushType, pushJobId);
+    VersionCreationResponse response = new VersionCreationResponse();
+    CreateVersion createVersion = new CreateVersion(true, Optional.of(accessClient), false);
+    Lazy<Boolean> isActiveActiveReplicationEnabledInAllRegions = Lazy.of(() -> true);
+
+    when(admin.whetherEnableBatchPushFromAdmin(clusterName, storeName)).thenReturn(true);
+    when(admin.calculateNumberOfPartitions(clusterName, storeName)).thenReturn(computedPartitionCount);
+
+    Version version = mock(Version.class);
+    when(version.getStoreName()).thenReturn(storeName);
+    when(version.getPartitionCount()).thenReturn(computedPartitionCount);
+    when(version.getNumber()).thenReturn(versionNumber);
+    when(version.kafkaTopicName()).thenReturn("testStore_v11");
+    // Non-blob version
+    when(version.isBlobBasedIngestion()).thenReturn(false);
+
+    when(
+        admin.incrementVersionIdempotent(
+            clusterName,
+            storeName,
+            request.getPushJobId(),
+            computedPartitionCount,
+            response.getReplicas(),
+            pushType,
+            request.isSendStartOfPush(),
+            request.isSorted(),
+            request.getCompressionDictionary(),
+            Optional.ofNullable(request.getSourceGridFabric()),
+            Optional.ofNullable(request.getCertificateInRequest()),
+            request.getRewindTimeInSecondsOverride(),
+            Optional.ofNullable(request.getEmergencySourceRegion()),
+            request.isDeferVersionSwap(),
+            request.getTargetedRegions(),
+            request.getRepushSourceVersion(),
+            request.getRepushTtlSeconds())).thenReturn(version);
+
+    createVersion
+        .handleNonStreamPushType(admin, store, request, response, isActiveActiveReplicationEnabledInAllRegions);
+
+    // Verify blob fields are NOT populated for non-blob push
+    assertFalse(response.isBlobBasedPush(), "Expected blobBasedPush to be false for normal push");
+    assertNull(response.getBlobStorageUri());
+    assertNull(response.getBlobStorageType());
+  }
+
+  @Test
   public void testEmptyPushThrowsNoStoreFoundException() throws Exception {
     CreateVersion createVersion = new CreateVersion(false, Optional.of(NoOpDynamicAccessController.INSTANCE), false);
     Route emptyPushRoute = createVersion.emptyPush(admin);

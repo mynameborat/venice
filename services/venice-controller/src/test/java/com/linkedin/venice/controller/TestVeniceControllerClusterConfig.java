@@ -553,4 +553,23 @@ public class TestVeniceControllerClusterConfig {
     VeniceControllerClusterConfig clusterConfig = new VeniceControllerClusterConfig(new VeniceProperties(baseProps));
     assertEquals(clusterConfig.getControllerHelixParticipantDeregistrationTimeoutMs(), 60000L);
   }
+
+  @Test
+  public void testBlobStorageConfigDefaults() {
+    Properties baseProps = getBaseSingleRegionProperties(false);
+    VeniceControllerClusterConfig clusterConfig = new VeniceControllerClusterConfig(new VeniceProperties(baseProps));
+    assertEquals(clusterConfig.getBlobStorageType(), "");
+    assertEquals(clusterConfig.getBlobStorageBaseUri(), "");
+  }
+
+  @Test
+  public void testBlobStorageConfigExplicitValues() {
+    Properties baseProps = getBaseSingleRegionProperties(false);
+    baseProps.setProperty(ConfigKeys.BLOB_STORAGE_TYPE, "HDFS");
+    baseProps.setProperty(ConfigKeys.BLOB_STORAGE_BASE_URI, "hdfs:///venice/blob");
+
+    VeniceControllerClusterConfig clusterConfig = new VeniceControllerClusterConfig(new VeniceProperties(baseProps));
+    assertEquals(clusterConfig.getBlobStorageType(), "HDFS");
+    assertEquals(clusterConfig.getBlobStorageBaseUri(), "hdfs:///venice/blob");
+  }
 }
