@@ -28,6 +28,7 @@ import com.linkedin.davinci.storage.StorageService;
 import com.linkedin.davinci.store.StorageEngine;
 import com.linkedin.davinci.store.StoragePartitionAdjustmentTrigger;
 import com.linkedin.davinci.store.rocksdb.RocksDBServerConfig;
+import com.linkedin.venice.blobtransfer.storage.BlobStorageType;
 import com.linkedin.venice.exceptions.VeniceBlobTransferCancelledException;
 import com.linkedin.venice.exceptions.VenicePeersNotFoundException;
 import com.linkedin.venice.kafka.protocol.state.StoreVersionState;
@@ -39,6 +40,7 @@ import com.linkedin.venice.offsets.OffsetRecord;
 import com.linkedin.venice.pubsub.PubSubContext;
 import com.linkedin.venice.pubsub.PubSubUtil;
 import com.linkedin.venice.pubsub.api.PubSubSymbolicPosition;
+import com.linkedin.venice.pushmonitor.PushControlSignalAccessor;
 import com.linkedin.venice.utils.ConfigCommonUtils;
 import com.linkedin.venice.utils.Utils;
 import java.io.InputStream;
@@ -1208,5 +1210,28 @@ public class DefaultIngestionBackendTest {
     backend.startConsumption(storeConfig, PARTITION, Optional.empty());
     Assert
         .assertEquals(backend.getReplicaIntendedState(replicaId), DefaultIngestionBackend.ReplicaIntendedState.RUNNING);
+  }
+
+  @Test
+  public void testStartConsumption_blobBasedIngestion() {
+    // When version.isBlobBasedIngestion() returns true, the blob ingestion path should be taken
+    // and storeIngestionService.startConsumption should never be called.
+    when(version.isBlobBasedIngestion()).thenReturn(true);
+    when(version.getBlobStorageUri()).thenReturn("/tmp/venice-blob");
+    when(version.getBlobStorageType()).thenReturn(BlobStorageType.LOCAL_FS.name());
+
+    // Set up a PushControlSignalAccessor
+    PushControlSignalAccessor pushControlSignalAccessor = mock(PushControlSignalAccessor.class);
+    ingestionBackend.setPushControlSignalAccessor(pushControlSignalAccessor);
+
+    // Set up leaderFollowerNotifiers queue
+    java.util.Queue<com.linkedin.davinci.notifier.VeniceNotifier> notifiersQueue =
+        new java.util.concurrent.ConcurrentLinkedQueue<>();
+    when(storeIngestionService.getLeaderFollowerNotifiers()).thenReturn(notifiersQueue);
+
+    ingestionBackend.startConsumption(storeConfig, PARTITION, Optional.empty());
+
+    // Verify that the normal Kafka consumption path was NOT taken
+    verify(storeIngestionService, never()).startConsumption(any(VeniceStoreVersionConfig.class), anyInt(), any());
   }
 }

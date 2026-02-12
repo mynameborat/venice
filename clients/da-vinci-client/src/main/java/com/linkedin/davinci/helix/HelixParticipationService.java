@@ -22,11 +22,13 @@ import com.linkedin.venice.helix.HelixPartitionStatusAccessor;
 import com.linkedin.venice.helix.HelixStatusMessageChannel;
 import com.linkedin.venice.helix.SafeHelixManager;
 import com.linkedin.venice.helix.VeniceOfflinePushMonitorAccessor;
+import com.linkedin.venice.helix.VenicePushControlSignalAccessor;
 import com.linkedin.venice.helix.ZkClientFactory;
 import com.linkedin.venice.meta.Instance;
 import com.linkedin.venice.meta.ReadOnlySchemaRepository;
 import com.linkedin.venice.meta.ReadOnlyStoreRepository;
 import com.linkedin.venice.pushmonitor.KillOfflinePushMessage;
+import com.linkedin.venice.pushmonitor.PushControlSignalAccessor;
 import com.linkedin.venice.pushstatushelper.PushStatusStoreWriter;
 import com.linkedin.venice.schema.SchemaEntry;
 import com.linkedin.venice.schema.writecompute.DerivedSchemaEntry;
@@ -371,6 +373,10 @@ public class HelixParticipationService extends AbstractVeniceService
         new HelixAdapterSerializer(),
         veniceServerConfig.getLogContext(),
         veniceConfigLoader.getVeniceClusterConfig().getRefreshAttemptsForZkReconnect());
+
+    PushControlSignalAccessor pushControlSignalAccessor =
+        new VenicePushControlSignalAccessor(clusterName, zkClient, new HelixAdapterSerializer());
+    ((DefaultIngestionBackend) ingestionBackend).setPushControlSignalAccessor(pushControlSignalAccessor);
 
     /**
      * The accessor can only get created successfully after helix manager is created.

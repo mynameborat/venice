@@ -2181,6 +2181,16 @@ public class ConfigKeys {
    */
   public static final String BLOB_STORAGE_BASE_URI = "blob.storage.base.uri";
 
+  /**
+   * Maximum number of retries when downloading SST files from blob storage during blob-based ingestion.
+   */
+  public static final String BLOB_INGESTION_DOWNLOAD_MAX_RETRIES = "blob.ingestion.download.max.retries";
+
+  /**
+   * Interval in milliseconds to poll for the blob upload completion signal in ZooKeeper.
+   */
+  public static final String BLOB_INGESTION_POLL_INTERVAL_MS = "blob.ingestion.poll.interval.ms";
+
   // Port used by peer-to-peer transfer service. It should be used by both server and client
   public static final String DAVINCI_P2P_BLOB_TRANSFER_SERVER_PORT = "davinci.p2p.blob.transfer.server.port";
   // Ideally this config should NOT be used but for testing purpose on a single host, we need to separate the ports.

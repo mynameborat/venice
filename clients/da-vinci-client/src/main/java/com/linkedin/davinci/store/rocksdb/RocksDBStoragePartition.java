@@ -40,6 +40,7 @@ import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.EnvOptions;
 import org.rocksdb.FlushOptions;
+import org.rocksdb.IngestExternalFileOptions;
 import org.rocksdb.MemoryUsageType;
 import org.rocksdb.MemoryUtil;
 import org.rocksdb.Options;
@@ -458,6 +459,29 @@ public class RocksDBStoragePartition extends AbstractStoragePartition {
      * the last SST file written is finished.
      */
     rocksDBSstFileWriter.ingestSSTFiles(rocksDB, columnFamilyHandleList);
+  }
+
+  /**
+   * Ingest externally produced SST files directly into the default column family.
+   * Used by blob-based ingestion where SST files are downloaded from blob storage.
+   *
+   * @param sstFilePaths list of absolute paths to SST files to ingest
+   */
+  public synchronized void ingestExternalSSTFiles(List<String> sstFilePaths) {
+    makeSureRocksDBIsStillOpen();
+    if (sstFilePaths == null || sstFilePaths.isEmpty()) {
+      LOGGER.info("No SST files to ingest for replica: {}", replicaId);
+      return;
+    }
+    LOGGER.info("Start ingesting external SST files to replica: {} from files: {}", replicaId, sstFilePaths);
+    try (IngestExternalFileOptions ingestOptions = new IngestExternalFileOptions()) {
+      ingestOptions.setMoveFiles(true);
+      rocksDB.ingestExternalFile(columnFamilyHandleList.get(0), sstFilePaths, ingestOptions);
+      LOGGER.info("Finished ingesting external SST files to replica: {} from files: {}", replicaId, sstFilePaths);
+    } catch (RocksDBException e) {
+      checkAndThrowDiskLimitException(e);
+      throw new VeniceException("Received exception during RocksDB#ingestExternalFile for replica: " + replicaId, e);
+    }
   }
 
   @Override

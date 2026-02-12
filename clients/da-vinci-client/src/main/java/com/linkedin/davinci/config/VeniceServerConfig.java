@@ -4,6 +4,8 @@ import static com.linkedin.davinci.stats.ingestion.heartbeat.HeartbeatMonitoring
 import static com.linkedin.venice.ConfigConstants.DEFAULT_MAX_RECORD_SIZE_BYTES_BACKFILL;
 import static com.linkedin.venice.ConfigKeys.ACL_IN_MEMORY_CACHE_TTL_MS;
 import static com.linkedin.venice.ConfigKeys.AUTOCREATE_DATA_PATH;
+import static com.linkedin.venice.ConfigKeys.BLOB_INGESTION_DOWNLOAD_MAX_RETRIES;
+import static com.linkedin.venice.ConfigKeys.BLOB_INGESTION_POLL_INTERVAL_MS;
 import static com.linkedin.venice.ConfigKeys.BLOB_RECEIVE_MAX_TIMEOUT_IN_MIN;
 import static com.linkedin.venice.ConfigKeys.BLOB_RECEIVE_READER_IDLE_TIME_IN_SECONDS;
 import static com.linkedin.venice.ConfigKeys.BLOB_TRANSFER_ACL_ENABLED;
@@ -638,6 +640,8 @@ public class VeniceServerConfig extends VeniceClusterConfig {
   private final int maxConcurrentBlobReceiveReplicas;
   private final int dvcP2pBlobTransferServerPort;
   private final int dvcP2pBlobTransferClientPort;
+  private final int blobIngestionDownloadMaxRetries;
+  private final long blobIngestionPollIntervalMs;
   private final boolean daVinciCurrentVersionBootstrappingSpeedupEnabled;
   private final long daVinciCurrentVersionBootstrappingQuotaRecordsPerSecond;
   private final long daVinciCurrentVersionBootstrappingQuotaBytesPerSecond;
@@ -759,6 +763,9 @@ public class VeniceServerConfig extends VeniceClusterConfig {
     dvcP2pBlobTransferServerPort = serverProperties.getInt(DAVINCI_P2P_BLOB_TRANSFER_SERVER_PORT, -1);
     dvcP2pBlobTransferClientPort =
         serverProperties.getInt(DAVINCI_P2P_BLOB_TRANSFER_CLIENT_PORT, dvcP2pBlobTransferServerPort);
+
+    blobIngestionDownloadMaxRetries = serverProperties.getInt(BLOB_INGESTION_DOWNLOAD_MAX_RETRIES, 3);
+    blobIngestionPollIntervalMs = serverProperties.getLong(BLOB_INGESTION_POLL_INTERVAL_MS, 5000L);
 
     String lfThreadPoolStrategyStr = serverProperties.getString(
         LEADER_FOLLOWER_STATE_TRANSITION_THREAD_POOL_STRATEGY,
@@ -1304,6 +1311,14 @@ public class VeniceServerConfig extends VeniceClusterConfig {
 
   public int getBlobTransferDisabledTimeLagThresholdInMinutes() {
     return blobTransferDisabledTimeLagThresholdInMinutes;
+  }
+
+  public int getBlobIngestionDownloadMaxRetries() {
+    return blobIngestionDownloadMaxRetries;
+  }
+
+  public long getBlobIngestionPollIntervalMs() {
+    return blobIngestionPollIntervalMs;
   }
 
   public int getSnapshotCleanupIntervalInMins() {

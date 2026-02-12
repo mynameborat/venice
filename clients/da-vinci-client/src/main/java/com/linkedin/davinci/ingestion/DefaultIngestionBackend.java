@@ -12,6 +12,8 @@ import com.linkedin.davinci.storage.StorageService;
 import com.linkedin.davinci.store.StorageEngine;
 import com.linkedin.davinci.store.StoragePartitionAdjustmentTrigger;
 import com.linkedin.davinci.store.StoragePartitionConfig;
+import com.linkedin.venice.blobtransfer.storage.BlobStorageType;
+import com.linkedin.venice.exceptions.VeniceException;
 import com.linkedin.venice.exceptions.VenicePeersNotFoundException;
 import com.linkedin.venice.kafka.protocol.state.StoreVersionState;
 import com.linkedin.venice.meta.IngestionMode;
@@ -21,8 +23,10 @@ import com.linkedin.venice.meta.Version;
 import com.linkedin.venice.offsets.OffsetRecord;
 import com.linkedin.venice.pubsub.api.PubSubPosition;
 import com.linkedin.venice.pubsub.api.PubSubSymbolicPosition;
+import com.linkedin.venice.pushmonitor.PushControlSignalAccessor;
 import com.linkedin.venice.store.rocksdb.RocksDBUtils;
 import com.linkedin.venice.utils.ConfigCommonUtils;
+import com.linkedin.venice.utils.DaemonThreadFactory;
 import com.linkedin.venice.utils.LatencyUtils;
 import com.linkedin.venice.utils.Utils;
 import com.linkedin.venice.utils.concurrent.VeniceConcurrentHashMap;
@@ -30,8 +34,11 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
@@ -54,6 +61,8 @@ public class DefaultIngestionBackend implements IngestionBackend {
       new VeniceConcurrentHashMap<>();
   private final BlobTransferManager blobTransferManager;
   private final boolean isIsolatedIngestion;
+  private final ExecutorService blobIngestionExecutor;
+  private PushControlSignalAccessor pushControlSignalAccessor;
 
   // Per-replica locks to ensure mutual exclusion between blob transfer triggerred consumption start and cancel
   // operations
@@ -74,6 +83,7 @@ public class DefaultIngestionBackend implements IngestionBackend {
     this.blobTransferManager = blobTransferManager;
     this.serverConfig = serverConfig;
     this.isIsolatedIngestion = serverConfig != null && IngestionMode.ISOLATED.equals(serverConfig.getIngestionMode());
+    this.blobIngestionExecutor = Executors.newFixedThreadPool(4, new DaemonThreadFactory("blob-ingestion"));
   }
 
   @Override
@@ -87,6 +97,12 @@ public class DefaultIngestionBackend implements IngestionBackend {
         Utils.waitStoreVersionOrThrow(storeVersion, getStoreIngestionService().getMetadataRepo());
     Supplier<StoreVersionState> svsSupplier = () -> storageMetadataService.getStoreVersionState(storeVersion);
     syncStoreVersionConfig(storeAndVersion.getStore(), storeConfig);
+
+    Version version = storeAndVersion.getVersion();
+    if (version.isBlobBasedIngestion()) {
+      startBlobBasedIngestion(storeConfig, partition, storeAndVersion, svsSupplier);
+      return;
+    }
 
     String replicaId = Utils.getReplicaId(storeVersion, partition);
 
@@ -641,9 +657,15 @@ public class DefaultIngestionBackend implements IngestionBackend {
     return storeIngestionService;
   }
 
+  public void setPushControlSignalAccessor(PushControlSignalAccessor accessor) {
+    this.pushControlSignalAccessor = accessor;
+  }
+
   @Override
   public void close() {
-    // Do nothing here, since this is only a wrapper class.
+    if (blobIngestionExecutor != null) {
+      blobIngestionExecutor.shutdownNow();
+    }
   }
 
   StorageMetadataService getStorageMetadataService() {
@@ -662,6 +684,41 @@ public class DefaultIngestionBackend implements IngestionBackend {
 
   void removeReplicaConsumptionContext(String replicaId) {
     replicaContexts.remove(replicaId);
+  }
+
+  private void startBlobBasedIngestion(
+      VeniceStoreVersionConfig storeConfig,
+      int partition,
+      StoreVersionInfo storeAndVersion,
+      Supplier<StoreVersionState> svsSupplier) {
+    Version version = storeAndVersion.getVersion();
+    String kafkaTopic = storeConfig.getStoreVersionName();
+
+    if (pushControlSignalAccessor == null) {
+      throw new VeniceException(
+          "PushControlSignalAccessor is not set; cannot start blob-based ingestion for " + kafkaTopic + " partition "
+              + partition);
+    }
+
+    String blobStorageUri = version.getBlobStorageUri();
+    BlobStorageType blobStorageType = BlobStorageType.fromString(version.getBlobStorageType());
+    Queue<VeniceNotifier> notifiers = getStoreIngestionService().getLeaderFollowerNotifiers();
+
+    BlobIngestionTask task = new BlobIngestionTask(
+        storeAndVersion.getStore().getName(),
+        version.getNumber(),
+        partition,
+        blobStorageUri,
+        blobStorageType,
+        pushControlSignalAccessor,
+        storageService,
+        storeConfig,
+        svsSupplier,
+        notifiers,
+        serverConfig);
+
+    LOGGER.info("Submitting blob ingestion task for {} partition {}", kafkaTopic, partition);
+    blobIngestionExecutor.submit(task);
   }
 
   /**

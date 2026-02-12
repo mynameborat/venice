@@ -1221,6 +1221,10 @@ public class KafkaStoreIngestionService extends AbstractVeniceService implements
     leaderFollowerNotifiers.add(notifier);
   }
 
+  public Queue<VeniceNotifier> getLeaderFollowerNotifiers() {
+    return leaderFollowerNotifiers;
+  }
+
   // test only
   public void replaceAndAddTestNotifier(VeniceNotifier notifier) {
     leaderFollowerNotifiers.removeIf(veniceNotifier -> veniceNotifier instanceof PushStatusNotifier);
