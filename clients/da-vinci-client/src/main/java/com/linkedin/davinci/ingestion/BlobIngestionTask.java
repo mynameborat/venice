@@ -22,7 +22,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import org.apache.helix.zookeeper.zkclient.IZkDataListener;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -119,11 +122,34 @@ public class BlobIngestionTask implements Runnable {
   }
 
   /**
-   * Poll ZK for the BLOB_UPLOAD_COMPLETE signal until it appears.
+   * Wait for the BLOB_UPLOAD_COMPLETE signal using a ZK watcher for event-driven notification.
+   * Falls back to checking the signal immediately after subscribing to handle the race condition
+   * where the signal was set before the watcher was registered.
    */
   void waitForBlobUploadComplete() throws InterruptedException {
     LOGGER.info("Waiting for BLOB_UPLOAD_COMPLETE signal for {}", kafkaTopic);
-    while (!Thread.currentThread().isInterrupted()) {
+    CountDownLatch latch = new CountDownLatch(1);
+
+    IZkDataListener listener = new IZkDataListener() {
+      @Override
+      public void handleDataChange(String dataPath, Object data) {
+        // Re-read from accessor to get properly deserialized data
+        PushControlSignal signal = pushControlSignalAccessor.getPushControlSignal(kafkaTopic);
+        if (signal != null && signal.hasSignal(PushControlSignalType.BLOB_UPLOAD_COMPLETE)) {
+          latch.countDown();
+        }
+      }
+
+      @Override
+      public void handleDataDeleted(String dataPath) {
+        // ZNode deleted — signal will never arrive
+        LOGGER.warn("PushControlSignal ZNode deleted for {}", kafkaTopic);
+      }
+    };
+
+    pushControlSignalAccessor.subscribePushControlSignalChange(kafkaTopic, listener);
+    try {
+      // Check immediately in case the signal was set before we subscribed
       PushControlSignal signal = pushControlSignalAccessor.getPushControlSignal(kafkaTopic);
       if (signal != null && signal.hasSignal(PushControlSignalType.BLOB_UPLOAD_COMPLETE)) {
         LOGGER.info(
@@ -132,9 +158,19 @@ public class BlobIngestionTask implements Runnable {
             signal.getSignalTimestamp(PushControlSignalType.BLOB_UPLOAD_COMPLETE));
         return;
       }
-      Thread.sleep(pollIntervalMs);
+
+      // Wait for the watcher to fire; use pollIntervalMs as a periodic check interval
+      // to detect thread interruption and handle edge cases
+      while (!Thread.currentThread().isInterrupted()) {
+        if (latch.await(pollIntervalMs, TimeUnit.MILLISECONDS)) {
+          LOGGER.info("Received BLOB_UPLOAD_COMPLETE signal for {} via ZK watcher", kafkaTopic);
+          return;
+        }
+      }
+      throw new InterruptedException("Interrupted while waiting for BLOB_UPLOAD_COMPLETE signal for " + kafkaTopic);
+    } finally {
+      pushControlSignalAccessor.unsubscribePushControlSignalChange(kafkaTopic, listener);
     }
-    throw new InterruptedException("Interrupted while waiting for BLOB_UPLOAD_COMPLETE signal for " + kafkaTopic);
   }
 
   /**

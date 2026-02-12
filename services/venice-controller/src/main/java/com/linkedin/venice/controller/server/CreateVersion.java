@@ -322,6 +322,7 @@ public class CreateVersion extends AbstractRoute {
       response.setBlobBasedPush(true);
       response.setBlobStorageUri(version.getBlobStorageUri());
       response.setBlobStorageType(version.getBlobStorageType());
+      response.setBlobSstTableFormat(admin.getControllerConfig(request.getClusterName()).getBlobSstTableFormat());
     }
   }
 

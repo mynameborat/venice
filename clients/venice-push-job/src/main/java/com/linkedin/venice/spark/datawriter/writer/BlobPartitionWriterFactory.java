@@ -7,6 +7,7 @@ import com.linkedin.venice.blobtransfer.storage.BlobStorageType;
 import com.linkedin.venice.blobtransfer.storage.LocalFsBlobStorageClient;
 import com.linkedin.venice.exceptions.VeniceException;
 import com.linkedin.venice.spark.datawriter.task.DataWriterAccumulators;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.Properties;
 import org.apache.spark.api.java.function.MapPartitionsFunction;
@@ -41,7 +42,7 @@ public class BlobPartitionWriterFactory implements MapPartitionsFunction<Row, Ro
     } finally {
       blobStorageClient.close();
     }
-    return rows;
+    return Collections.emptyIterator();
   }
 
   static BlobStorageClient createBlobStorageClient(Properties properties) {

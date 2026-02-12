@@ -39,6 +39,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
@@ -62,6 +63,7 @@ public class DefaultIngestionBackend implements IngestionBackend {
   private final BlobTransferManager blobTransferManager;
   private final boolean isIsolatedIngestion;
   private final ExecutorService blobIngestionExecutor;
+  private final Map<String, Future<?>> blobIngestionFutures = new VeniceConcurrentHashMap<>();
   private PushControlSignalAccessor pushControlSignalAccessor;
 
   // Per-replica locks to ensure mutual exclusion between blob transfer triggerred consumption start and cancel
@@ -83,7 +85,9 @@ public class DefaultIngestionBackend implements IngestionBackend {
     this.blobTransferManager = blobTransferManager;
     this.serverConfig = serverConfig;
     this.isIsolatedIngestion = serverConfig != null && IngestionMode.ISOLATED.equals(serverConfig.getIngestionMode());
-    this.blobIngestionExecutor = Executors.newFixedThreadPool(4, new DaemonThreadFactory("blob-ingestion"));
+    int blobIngestionPoolSize = serverConfig != null ? serverConfig.getBlobIngestionMaxConcurrentTasks() : 4;
+    this.blobIngestionExecutor =
+        Executors.newFixedThreadPool(blobIngestionPoolSize, new DaemonThreadFactory("blob-ingestion"));
   }
 
   @Override
@@ -541,6 +545,7 @@ public class DefaultIngestionBackend implements IngestionBackend {
 
   @Override
   public void killConsumptionTask(String topicName) {
+    cancelBlobIngestionFuturesForTopic(topicName);
     getStoreIngestionService().killConsumptionTask(topicName);
   }
 
@@ -666,6 +671,18 @@ public class DefaultIngestionBackend implements IngestionBackend {
     if (blobIngestionExecutor != null) {
       blobIngestionExecutor.shutdownNow();
     }
+    blobIngestionFutures.clear();
+  }
+
+  private void cancelBlobIngestionFuturesForTopic(String topicName) {
+    blobIngestionFutures.entrySet().removeIf(entry -> {
+      if (entry.getKey().startsWith(topicName)) {
+        LOGGER.info("Cancelling blob ingestion task for replica {}", entry.getKey());
+        entry.getValue().cancel(true);
+        return true;
+      }
+      return false;
+    });
   }
 
   StorageMetadataService getStorageMetadataService() {
@@ -717,8 +734,10 @@ public class DefaultIngestionBackend implements IngestionBackend {
         notifiers,
         serverConfig);
 
+    String replicaId = Utils.getReplicaId(kafkaTopic, partition);
     LOGGER.info("Submitting blob ingestion task for {} partition {}", kafkaTopic, partition);
-    blobIngestionExecutor.submit(task);
+    Future<?> future = blobIngestionExecutor.submit(task);
+    blobIngestionFutures.put(replicaId, future);
   }
 
   /**

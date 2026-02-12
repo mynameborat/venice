@@ -1,5 +1,6 @@
 package com.linkedin.venice.spark.datawriter.writer;
 
+import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_SST_TABLE_FORMAT;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_STORAGE_BASE_URI;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.TOPIC_PROP;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.VALUE_SCHEMA_ID_PROP;
@@ -142,6 +143,57 @@ public class BlobPartitionWriterTest {
     File sstFile = new File(expectedPath);
     Assert.assertTrue(sstFile.exists(), "SST file should exist at: " + expectedPath);
     Assert.assertTrue(sstFile.length() > 0, "SST file should not be empty");
+  }
+
+  @Test
+  public void testProcessRows_withBlockBasedTableFormat() throws Exception {
+    DataWriterAccumulators accumulators = new DataWriterAccumulators(spark);
+    String blobBaseUri = tempBlobDir.toAbsolutePath().toString();
+    Properties props = createTestProperties(blobBaseUri);
+    props.setProperty(BLOB_SST_TABLE_FORMAT, "BLOCK_BASED_TABLE");
+
+    List<Row> rows = new ArrayList<>();
+    rows.add(createRow(new byte[] { 1, 2, 3 }, new byte[] { 10, 20 }));
+
+    JavaSparkContext jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
+    jsc.parallelize(Collections.singletonList(1), 1).foreachPartition(partition -> {
+      LocalFsBlobStorageClient client = new LocalFsBlobStorageClient();
+      try (BlobPartitionWriter writer = new BlobPartitionWriter(props, accumulators, client)) {
+        writer.processRows(rows.iterator());
+      } finally {
+        client.close();
+      }
+    });
+
+    String expectedPath = BlobStoragePaths.sstFile(blobBaseUri, "test-store", 1, 0, "data_0.sst");
+    File sstFile = new File(expectedPath);
+    Assert.assertTrue(sstFile.exists(), "SST file should exist with BLOCK_BASED_TABLE format");
+    Assert.assertTrue(sstFile.length() > 0, "SST file should not be empty");
+  }
+
+  @Test
+  public void testProcessRows_defaultsToBlockBasedWhenFormatNotSet() throws Exception {
+    DataWriterAccumulators accumulators = new DataWriterAccumulators(spark);
+    String blobBaseUri = tempBlobDir.toAbsolutePath().toString();
+    Properties props = createTestProperties(blobBaseUri);
+    // Do NOT set BLOB_SST_TABLE_FORMAT — should default to BLOCK_BASED_TABLE
+
+    List<Row> rows = new ArrayList<>();
+    rows.add(createRow(new byte[] { 1, 2, 3 }, new byte[] { 10, 20 }));
+
+    JavaSparkContext jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
+    jsc.parallelize(Collections.singletonList(1), 1).foreachPartition(partition -> {
+      LocalFsBlobStorageClient client = new LocalFsBlobStorageClient();
+      try (BlobPartitionWriter writer = new BlobPartitionWriter(props, accumulators, client)) {
+        writer.processRows(rows.iterator());
+      } finally {
+        client.close();
+      }
+    });
+
+    String expectedPath = BlobStoragePaths.sstFile(blobBaseUri, "test-store", 1, 0, "data_0.sst");
+    File sstFile = new File(expectedPath);
+    Assert.assertTrue(sstFile.exists(), "SST file should exist with default table format");
   }
 
   private Properties createTestProperties(String blobBaseUri) {

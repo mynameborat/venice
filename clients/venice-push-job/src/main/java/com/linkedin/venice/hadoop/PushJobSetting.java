@@ -178,5 +178,6 @@ public class PushJobSetting implements Serializable {
   public boolean blobBasedPush;
   public String blobStorageUri;
   public String blobStorageType;
+  public String blobSstTableFormat;
 
 }

@@ -467,4 +467,5 @@ public final class VenicePushJobConstants {
   // Blob-based push constants
   public static final String BLOB_STORAGE_BASE_URI = "blob.storage.base.uri";
   public static final String BLOB_STORAGE_TYPE = "blob.storage.type";
+  public static final String BLOB_SST_TABLE_FORMAT = "blob.sst.table.format";
 }

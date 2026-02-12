@@ -312,7 +312,7 @@ public class VersionImpl implements Version {
 
   @Override
   public String getBlobStorageUri() {
-    return this.storeVersion.blobStorageUri.toString();
+    return this.storeVersion.blobStorageUri == null ? null : this.storeVersion.blobStorageUri.toString();
   }
 
   @Override
@@ -322,7 +322,7 @@ public class VersionImpl implements Version {
 
   @Override
   public String getBlobStorageType() {
-    return this.storeVersion.blobStorageType.toString();
+    return this.storeVersion.blobStorageType == null ? null : this.storeVersion.blobStorageType.toString();
   }
 
   @Override

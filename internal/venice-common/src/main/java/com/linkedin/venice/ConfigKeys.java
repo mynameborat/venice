@@ -2191,6 +2191,19 @@ public class ConfigKeys {
    */
   public static final String BLOB_INGESTION_POLL_INTERVAL_MS = "blob.ingestion.poll.interval.ms";
 
+  /**
+   * RocksDB SST table format to use for blob-based ingestion SST files.
+   * Must match the server's RocksDB table format configuration.
+   * Valid values: "BLOCK_BASED_TABLE" (default), "PLAIN_TABLE".
+   */
+  public static final String BLOB_SST_TABLE_FORMAT = "blob.sst.table.format";
+
+  /**
+   * Maximum number of concurrent blob ingestion tasks (download + ingest) per server.
+   * Controls the thread pool size in DefaultIngestionBackend. Default: 4.
+   */
+  public static final String BLOB_INGESTION_MAX_CONCURRENT_TASKS = "blob.ingestion.max.concurrent.tasks";
+
   // Port used by peer-to-peer transfer service. It should be used by both server and client
   public static final String DAVINCI_P2P_BLOB_TRANSFER_SERVER_PORT = "davinci.p2p.blob.transfer.server.port";
   // Ideally this config should NOT be used but for testing purpose on a single host, we need to separate the ports.

@@ -1817,9 +1817,12 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
     PushControlSignal signal = signalAccessor.getPushControlSignal(kafkaTopic);
     if (signal == null) {
       signal = new PushControlSignal(kafkaTopic);
+      signal.emitSignal(PushControlSignalType.BLOB_UPLOAD_COMPLETE);
+      signalAccessor.createPushControlSignal(signal);
+    } else {
+      signal.emitSignal(PushControlSignalType.BLOB_UPLOAD_COMPLETE);
+      signalAccessor.updatePushControlSignal(signal);
     }
-    signal.emitSignal(PushControlSignalType.BLOB_UPLOAD_COMPLETE);
-    signalAccessor.updatePushControlSignal(signal);
     LOGGER.info("Notified blob push complete for topic: {} in cluster: {}.", kafkaTopic, clusterName);
   }
 

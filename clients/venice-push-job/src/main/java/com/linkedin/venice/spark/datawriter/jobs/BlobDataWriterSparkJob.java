@@ -1,5 +1,6 @@
 package com.linkedin.venice.spark.datawriter.jobs;
 
+import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_SST_TABLE_FORMAT;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_STORAGE_BASE_URI;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_STORAGE_TYPE;
 
@@ -36,6 +37,9 @@ public class BlobDataWriterSparkJob extends DataWriterSparkJob {
     // via the broadcast Properties in runComputeJob()
     getSparkSession().conf().set(BLOB_STORAGE_BASE_URI, pushJobSetting.blobStorageUri);
     getSparkSession().conf().set(BLOB_STORAGE_TYPE, pushJobSetting.blobStorageType);
+    if (pushJobSetting.blobSstTableFormat != null) {
+      getSparkSession().conf().set(BLOB_SST_TABLE_FORMAT, pushJobSetting.blobSstTableFormat);
+    }
   }
 
   @Override

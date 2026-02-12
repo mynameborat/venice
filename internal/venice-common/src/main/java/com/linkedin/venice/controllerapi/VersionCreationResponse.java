@@ -32,6 +32,7 @@ public class VersionCreationResponse extends VersionResponse {
   private boolean blobBasedPush = false;
   private String blobStorageUri = null;
   private String blobStorageType = null;
+  private String blobSstTableFormat = null;
 
   public void setPartitions(int partitions) {
     this.partitions = partitions;
@@ -145,6 +146,14 @@ public class VersionCreationResponse extends VersionResponse {
     this.blobStorageType = blobStorageType;
   }
 
+  public String getBlobSstTableFormat() {
+    return blobSstTableFormat;
+  }
+
+  public void setBlobSstTableFormat(String blobSstTableFormat) {
+    this.blobSstTableFormat = blobSstTableFormat;
+  }
+
   @JsonIgnore
   public String toString() {
     return VersionCreationResponse.class.getSimpleName() + "(partitions: " + partitions + ", replicas: " + replicas
@@ -153,6 +162,7 @@ public class VersionCreationResponse extends VersionResponse {
         + ", partitionerClass: " + partitionerClass + ", partitionerParams: " + partitionerParams
         + ", amplificationFactor: " + amplificationFactor + ", daVinciPushStatusStoreEnabled: "
         + daVinciPushStatusStoreEnabled + ", blobBasedPush: " + blobBasedPush + ", blobStorageUri: " + blobStorageUri
-        + ", blobStorageType: " + blobStorageType + ", super: " + super.toString() + ")";
+        + ", blobStorageType: " + blobStorageType + ", blobSstTableFormat: " + blobSstTableFormat + ", super: "
+        + super.toString() + ")";
   }
 }

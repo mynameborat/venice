@@ -2,6 +2,7 @@ package com.linkedin.venice.spark.datawriter.writer;
 
 import static com.linkedin.venice.spark.SparkConstants.KEY_COLUMN_NAME;
 import static com.linkedin.venice.spark.SparkConstants.VALUE_COLUMN_NAME;
+import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_SST_TABLE_FORMAT;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_STORAGE_BASE_URI;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.TOPIC_PROP;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.VALUE_SCHEMA_ID_PROP;
@@ -24,8 +25,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.TaskContext;
 import org.apache.spark.sql.Row;
+import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.EnvOptions;
 import org.rocksdb.Options;
+import org.rocksdb.PlainTableConfig;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.SstFileWriter;
 
@@ -51,12 +54,15 @@ public class BlobPartitionWriter implements Closeable {
   private static final String SST_FILE_NAME = "data_0.sst";
   private static final int SCHEMA_ID_PREFIX_SIZE = 4;
 
+  private static final String PLAIN_TABLE = "PLAIN_TABLE";
+
   private final BlobStorageClient blobStorageClient;
   private final SparkDataWriterTaskTracker taskTracker;
   private final int valueSchemaId;
   private final String storeName;
   private final int versionNumber;
   private final String blobStorageBaseUri;
+  private final String sstTableFormat;
   private final int partitionId;
 
   private SstFileWriter sstFileWriter;
@@ -75,6 +81,7 @@ public class BlobPartitionWriter implements Closeable {
     this.storeName = Version.parseStoreFromKafkaTopicName(topic);
     this.versionNumber = Version.parseVersionFromKafkaTopicName(topic);
     this.blobStorageBaseUri = jobProperties.getProperty(BLOB_STORAGE_BASE_URI);
+    this.sstTableFormat = jobProperties.getProperty(BLOB_SST_TABLE_FORMAT, "BLOCK_BASED_TABLE");
     this.partitionId = TaskContext.get().partitionId();
   }
 
@@ -135,12 +142,21 @@ public class BlobPartitionWriter implements Closeable {
     tempSstFile.deleteOnExit();
 
     Options options = new Options();
+    if (PLAIN_TABLE.equals(sstTableFormat)) {
+      options.setTableFormatConfig(new PlainTableConfig());
+    } else {
+      options.setTableFormatConfig(new BlockBasedTableConfig());
+    }
     EnvOptions envOptions = new EnvOptions();
     sstFileWriter = new SstFileWriter(envOptions, options);
     sstFileWriter.open(tempSstFile.getAbsolutePath());
     sstFileHasData = false;
 
-    LOGGER.info("Created SST file writer for partition {} at {}", partitionId, tempSstFile.getAbsolutePath());
+    LOGGER.info(
+        "Created SST file writer for partition {} at {} with table format {}",
+        partitionId,
+        tempSstFile.getAbsolutePath(),
+        sstTableFormat);
   }
 
   private void uploadSstFile() throws IOException {

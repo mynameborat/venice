@@ -431,4 +431,34 @@ public class TestVersion {
     assertEquals(cloned.getBlobStorageUri(), "hdfs:///venice/blob/testStore/v1");
     assertEquals(cloned.getBlobStorageType(), "HDFS");
   }
+
+  @Test
+  public void testGetBlobStorageUri_doesNotThrowForNonBlobVersion() {
+    Version version = new VersionImpl("testStore", 1, "test-push-id");
+    // Non-blob version should not throw NPE
+    assertNotNull(version.getBlobStorageUri());
+    assertEquals(version.getBlobStorageUri(), "");
+  }
+
+  @Test
+  public void testGetBlobStorageType_doesNotThrowForNonBlobVersion() {
+    Version version = new VersionImpl("testStore", 1, "test-push-id");
+    // Non-blob version should not throw NPE
+    assertNotNull(version.getBlobStorageType());
+    assertEquals(version.getBlobStorageType(), "");
+  }
+
+  @Test
+  public void testGetBlobStorageUri_returnsValueWhenSet() {
+    Version version = new VersionImpl("testStore", 1, "test-push-id");
+    version.setBlobStorageUri("hdfs:///venice/blob");
+    assertEquals(version.getBlobStorageUri(), "hdfs:///venice/blob");
+  }
+
+  @Test
+  public void testGetBlobStorageType_returnsValueWhenSet() {
+    Version version = new VersionImpl("testStore", 1, "test-push-id");
+    version.setBlobStorageType("LOCAL_FS");
+    assertEquals(version.getBlobStorageType(), "LOCAL_FS");
+  }
 }

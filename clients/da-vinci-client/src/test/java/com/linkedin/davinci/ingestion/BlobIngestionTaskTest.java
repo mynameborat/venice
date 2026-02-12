@@ -3,10 +3,10 @@ package com.linkedin.davinci.ingestion;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -25,7 +25,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
+import org.apache.helix.zookeeper.zkclient.IZkDataListener;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -75,39 +77,81 @@ public class BlobIngestionTaskTest {
     BlobIngestionTask task = createTask();
     task.waitForBlobUploadComplete();
 
-    // Should return immediately with one call
-    verify(pushControlSignalAccessor, times(1)).getPushControlSignal(KAFKA_TOPIC);
+    // Should subscribe, find signal immediately, then unsubscribe
+    verify(pushControlSignalAccessor).subscribePushControlSignalChange(eq(KAFKA_TOPIC), any(IZkDataListener.class));
+    verify(pushControlSignalAccessor).unsubscribePushControlSignalChange(eq(KAFKA_TOPIC), any(IZkDataListener.class));
+    // Immediate check finds signal
+    verify(pushControlSignalAccessor).getPushControlSignal(KAFKA_TOPIC);
   }
 
   @Test
-  public void testWaitForBlobUploadComplete_signalAppearsAfterPolling() throws InterruptedException {
+  public void testWaitForBlobUploadComplete_signalAppearsViaWatcher() throws InterruptedException {
     PushControlSignal noSignal = new PushControlSignal(KAFKA_TOPIC);
     PushControlSignal withSignal = new PushControlSignal(KAFKA_TOPIC);
     withSignal.emitSignal(PushControlSignalType.BLOB_UPLOAD_COMPLETE);
 
-    when(pushControlSignalAccessor.getPushControlSignal(KAFKA_TOPIC)).thenReturn(noSignal)
-        .thenReturn(noSignal)
-        .thenReturn(withSignal);
+    // First call (immediate check) returns no signal; subsequent calls return signal
+    when(pushControlSignalAccessor.getPushControlSignal(KAFKA_TOPIC)).thenReturn(noSignal).thenReturn(withSignal);
+
+    // Capture the listener and simulate a ZK data change
+    AtomicReference<IZkDataListener> capturedListener = new AtomicReference<>();
+    doAnswer(invocation -> {
+      capturedListener.set(invocation.getArgument(1));
+      return null;
+    }).when(pushControlSignalAccessor).subscribePushControlSignalChange(eq(KAFKA_TOPIC), any(IZkDataListener.class));
 
     BlobIngestionTask task = createTask();
-    task.waitForBlobUploadComplete();
 
-    verify(pushControlSignalAccessor, times(3)).getPushControlSignal(KAFKA_TOPIC);
+    // Run in a separate thread since waitForBlobUploadComplete blocks
+    Thread waitThread = new Thread(() -> {
+      try {
+        task.waitForBlobUploadComplete();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    });
+    waitThread.start();
+
+    // Wait for the listener to be registered, then simulate ZK data change
+    while (capturedListener.get() == null) {
+      Thread.sleep(5);
+    }
+    try {
+      capturedListener.get().handleDataChange("", null);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+
+    waitThread.join(5000);
+
+    verify(pushControlSignalAccessor).subscribePushControlSignalChange(eq(KAFKA_TOPIC), any(IZkDataListener.class));
+    verify(pushControlSignalAccessor).unsubscribePushControlSignalChange(eq(KAFKA_TOPIC), any(IZkDataListener.class));
   }
 
   @Test
-  public void testWaitForBlobUploadComplete_nullSignalThenAppears() throws InterruptedException {
-    PushControlSignal withSignal = new PushControlSignal(KAFKA_TOPIC);
-    withSignal.emitSignal(PushControlSignalType.BLOB_UPLOAD_COMPLETE);
-
-    when(pushControlSignalAccessor.getPushControlSignal(KAFKA_TOPIC)).thenReturn(null)
-        .thenReturn(null)
-        .thenReturn(withSignal);
+  public void testWaitForBlobUploadComplete_unsubscribesOnInterrupt() throws InterruptedException {
+    // Signal never arrives
+    when(pushControlSignalAccessor.getPushControlSignal(KAFKA_TOPIC)).thenReturn(null);
 
     BlobIngestionTask task = createTask();
-    task.waitForBlobUploadComplete();
 
-    verify(pushControlSignalAccessor, times(3)).getPushControlSignal(KAFKA_TOPIC);
+    Thread waitThread = new Thread(() -> {
+      try {
+        task.waitForBlobUploadComplete();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    });
+    waitThread.start();
+
+    // Give it time to subscribe and start waiting, then interrupt
+    Thread.sleep(50);
+    waitThread.interrupt();
+    waitThread.join(5000);
+
+    // Should always unsubscribe, even on interruption
+    verify(pushControlSignalAccessor).subscribePushControlSignalChange(eq(KAFKA_TOPIC), any(IZkDataListener.class));
+    verify(pushControlSignalAccessor).unsubscribePushControlSignalChange(eq(KAFKA_TOPIC), any(IZkDataListener.class));
   }
 
   @Test

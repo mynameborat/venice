@@ -128,6 +128,7 @@ public class DefaultIngestionBackendTest {
 
     when(blobTransferManager.getAggVersionedBlobTransferStats()).thenReturn(aggVersionedBlobTransferStats);
     when(blobTransferManager.getTransferStatusTrackingManager()).thenReturn(statusTrackingManager);
+    when(veniceServerConfig.getBlobIngestionMaxConcurrentTasks()).thenReturn(4);
 
     // Create the DefaultIngestionBackend instance with mocked dependencies
     ingestionBackend = new DefaultIngestionBackend(
@@ -1233,5 +1234,27 @@ public class DefaultIngestionBackendTest {
 
     // Verify that the normal Kafka consumption path was NOT taken
     verify(storeIngestionService, never()).startConsumption(any(VeniceStoreVersionConfig.class), anyInt(), any());
+  }
+
+  @Test
+  public void testKillConsumptionCancelsBlobIngestionFutures() {
+    // Set up a blob-based version
+    when(version.isBlobBasedIngestion()).thenReturn(true);
+    when(version.getBlobStorageUri()).thenReturn("/tmp/blob");
+    when(version.getBlobStorageType()).thenReturn("LOCAL_FS");
+
+    PushControlSignalAccessor pushControlSignalAccessor = mock(PushControlSignalAccessor.class);
+    ingestionBackend.setPushControlSignalAccessor(pushControlSignalAccessor);
+
+    java.util.Queue<com.linkedin.davinci.notifier.VeniceNotifier> notifiersQueue =
+        new java.util.concurrent.ConcurrentLinkedQueue<>();
+    when(storeIngestionService.getLeaderFollowerNotifiers()).thenReturn(notifiersQueue);
+
+    // Start blob ingestion — this submits a task and stores its Future
+    ingestionBackend.startConsumption(storeConfig, PARTITION, Optional.empty());
+
+    // Kill should cancel blob ingestion futures and delegate to ingestion service
+    ingestionBackend.killConsumptionTask(STORE_VERSION);
+    verify(storeIngestionService).killConsumptionTask(STORE_VERSION);
   }
 }

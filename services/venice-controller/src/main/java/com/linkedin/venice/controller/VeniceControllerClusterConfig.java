@@ -16,6 +16,7 @@ import static com.linkedin.venice.ConfigKeys.ADMIN_TOPIC_REPLICATION_FACTOR;
 import static com.linkedin.venice.ConfigKeys.ADMIN_TOPIC_SOURCE_REGION;
 import static com.linkedin.venice.ConfigKeys.AGGREGATE_REAL_TIME_SOURCE_REGION;
 import static com.linkedin.venice.ConfigKeys.ALLOW_CLUSTER_WIPE;
+import static com.linkedin.venice.ConfigKeys.BLOB_SST_TABLE_FORMAT;
 import static com.linkedin.venice.ConfigKeys.BLOB_STORAGE_BASE_URI;
 import static com.linkedin.venice.ConfigKeys.BLOB_STORAGE_TYPE;
 import static com.linkedin.venice.ConfigKeys.CHILD_CLUSTER_ALLOWLIST;
@@ -693,6 +694,7 @@ public class VeniceControllerClusterConfig {
 
   private final String blobStorageType;
   private final String blobStorageBaseUri;
+  private final String blobSstTableFormat;
 
   public VeniceControllerClusterConfig(VeniceProperties props) {
     this.props = props;
@@ -1303,6 +1305,7 @@ public class VeniceControllerClusterConfig {
 
     this.blobStorageType = props.getString(BLOB_STORAGE_TYPE, "");
     this.blobStorageBaseUri = props.getString(BLOB_STORAGE_BASE_URI, "");
+    this.blobSstTableFormat = props.getString(BLOB_SST_TABLE_FORMAT, "BLOCK_BASED_TABLE");
 
     this.logClusterConfig();
   }
@@ -2464,5 +2467,9 @@ public class VeniceControllerClusterConfig {
 
   public String getBlobStorageBaseUri() {
     return blobStorageBaseUri;
+  }
+
+  public String getBlobSstTableFormat() {
+    return blobSstTableFormat;
   }
 }

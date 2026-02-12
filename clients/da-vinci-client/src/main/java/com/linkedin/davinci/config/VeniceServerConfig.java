@@ -5,6 +5,7 @@ import static com.linkedin.venice.ConfigConstants.DEFAULT_MAX_RECORD_SIZE_BYTES_
 import static com.linkedin.venice.ConfigKeys.ACL_IN_MEMORY_CACHE_TTL_MS;
 import static com.linkedin.venice.ConfigKeys.AUTOCREATE_DATA_PATH;
 import static com.linkedin.venice.ConfigKeys.BLOB_INGESTION_DOWNLOAD_MAX_RETRIES;
+import static com.linkedin.venice.ConfigKeys.BLOB_INGESTION_MAX_CONCURRENT_TASKS;
 import static com.linkedin.venice.ConfigKeys.BLOB_INGESTION_POLL_INTERVAL_MS;
 import static com.linkedin.venice.ConfigKeys.BLOB_RECEIVE_MAX_TIMEOUT_IN_MIN;
 import static com.linkedin.venice.ConfigKeys.BLOB_RECEIVE_READER_IDLE_TIME_IN_SECONDS;
@@ -642,6 +643,7 @@ public class VeniceServerConfig extends VeniceClusterConfig {
   private final int dvcP2pBlobTransferClientPort;
   private final int blobIngestionDownloadMaxRetries;
   private final long blobIngestionPollIntervalMs;
+  private final int blobIngestionMaxConcurrentTasks;
   private final boolean daVinciCurrentVersionBootstrappingSpeedupEnabled;
   private final long daVinciCurrentVersionBootstrappingQuotaRecordsPerSecond;
   private final long daVinciCurrentVersionBootstrappingQuotaBytesPerSecond;
@@ -766,6 +768,7 @@ public class VeniceServerConfig extends VeniceClusterConfig {
 
     blobIngestionDownloadMaxRetries = serverProperties.getInt(BLOB_INGESTION_DOWNLOAD_MAX_RETRIES, 3);
     blobIngestionPollIntervalMs = serverProperties.getLong(BLOB_INGESTION_POLL_INTERVAL_MS, 5000L);
+    blobIngestionMaxConcurrentTasks = serverProperties.getInt(BLOB_INGESTION_MAX_CONCURRENT_TASKS, 4);
 
     String lfThreadPoolStrategyStr = serverProperties.getString(
         LEADER_FOLLOWER_STATE_TRANSITION_THREAD_POOL_STRATEGY,
@@ -1319,6 +1322,10 @@ public class VeniceServerConfig extends VeniceClusterConfig {
 
   public long getBlobIngestionPollIntervalMs() {
     return blobIngestionPollIntervalMs;
+  }
+
+  public int getBlobIngestionMaxConcurrentTasks() {
+    return blobIngestionMaxConcurrentTasks;
   }
 
   public int getSnapshotCleanupIntervalInMins() {

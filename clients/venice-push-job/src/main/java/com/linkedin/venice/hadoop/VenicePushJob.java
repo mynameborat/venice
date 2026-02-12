@@ -83,6 +83,8 @@ import static com.linkedin.venice.vpj.VenicePushJobConstants.VALUE_FIELD_PROP;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.VENICE_DISCOVER_URL_PROP;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.VENICE_STORE_NAME_PROP;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.linkedin.avroutil1.compatibility.AvroCompatibilityHelper;
 import com.linkedin.d2.balancer.D2Client;
 import com.linkedin.venice.PushJobCheckpoints;
@@ -2469,6 +2471,7 @@ public class VenicePushJob implements AutoCloseable {
     setting.blobBasedPush = versionCreationResponse.isBlobBasedPush();
     setting.blobStorageUri = versionCreationResponse.getBlobStorageUri();
     setting.blobStorageType = versionCreationResponse.getBlobStorageType();
+    setting.blobSstTableFormat = versionCreationResponse.getBlobSstTableFormat();
 
     if (setting.blobBasedPush) {
       setting.dataWriterComputeJobClass = BlobDataWriterSparkJob.class;
@@ -2597,8 +2600,18 @@ public class VenicePushJob implements AutoCloseable {
    * The manifest includes store name, version, partition count, and timestamp.
    */
   private void writeVersionManifest(PushJobSetting setting) {
-    String manifestContent = "{\"storeName\":\"" + setting.storeName + "\",\"version\":" + setting.version
-        + ",\"partitionCount\":" + setting.partitionCount + ",\"timestamp\":" + System.currentTimeMillis() + "}";
+    ObjectMapper mapper = new ObjectMapper();
+    ObjectNode manifest = mapper.createObjectNode();
+    manifest.put("storeName", setting.storeName);
+    manifest.put("version", setting.version);
+    manifest.put("partitionCount", setting.partitionCount);
+    manifest.put("timestamp", System.currentTimeMillis());
+    String manifestContent;
+    try {
+      manifestContent = mapper.writeValueAsString(manifest);
+    } catch (Exception e) {
+      throw new VeniceException("Failed to serialize version manifest to JSON", e);
+    }
     String manifestPath = BlobStoragePaths.versionManifest(setting.blobStorageUri, setting.storeName, setting.version);
 
     try (BlobStorageClient client = createBlobStorageClient(setting.blobStorageType)) {
