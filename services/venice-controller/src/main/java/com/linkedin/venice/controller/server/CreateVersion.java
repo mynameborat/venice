@@ -315,6 +315,13 @@ public class CreateVersion extends AbstractRoute {
     response.setCompressionStrategy(getCompressionStrategy(version, response.getKafkaTopic()));
     // Set the bootstrap servers
     configureSourceFabric(admin, version, isActiveActiveReplicationEnabledInAllRegions, request, response);
+
+    // Populate blob storage fields for BATCH_BLOB pushes
+    if (version.isBlobBasedIngestion()) {
+      response.setBlobBasedPush(true);
+      response.setBlobStorageUri(version.getBlobStorageUri());
+      response.setBlobStorageType(version.getBlobStorageType());
+    }
   }
 
   /**

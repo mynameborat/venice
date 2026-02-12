@@ -48,6 +48,7 @@ import com.linkedin.venice.acl.VeniceComponent;
 import com.linkedin.venice.annotation.VisibleForTesting;
 import com.linkedin.venice.authorization.AuthorizerService;
 import com.linkedin.venice.authorization.Resource;
+import com.linkedin.venice.blobtransfer.storage.BlobStoragePaths;
 import com.linkedin.venice.client.store.AvroSpecificStoreClient;
 import com.linkedin.venice.client.store.ClientConfig;
 import com.linkedin.venice.client.store.ClientFactory;
@@ -3214,8 +3215,14 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
               }
               version = new VersionImpl(storeName, versionNumber, pushJobId, numberOfPartitions);
             }
+            // Upgrade push type to BATCH_BLOB for blob-based ingestion stores
+            if (pushType == PushType.BATCH && store.isBlobBasedIngestionEnabled()) {
+              pushType = PushType.BATCH_BLOB;
+            }
+
             long createBatchTopicStartTime = System.currentTimeMillis();
-            if (clusterConfig.getConcurrentPushDetectionStrategy().isTopicWriteNeeded() || !isParent()) {
+            if (!pushType.isBatchBlob()
+                && (clusterConfig.getConcurrentPushDetectionStrategy().isTopicWriteNeeded() || !isParent())) {
               topicToCreationTime.computeIfAbsent(version.kafkaTopicName(), topic -> System.currentTimeMillis());
               createBatchTopics(
                   version,
@@ -3290,6 +3297,15 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
             }
 
             repository.updateStore(store);
+
+            // Set blob storage metadata on version for BATCH_BLOB pushes
+            if (pushType.isBatchBlob()) {
+              version.setBlobStorageUri(
+                  BlobStoragePaths.versionDir(clusterConfig.getBlobStorageBaseUri(), storeName, version.getNumber()));
+              version.setBlobStorageType(clusterConfig.getBlobStorageType());
+              repository.updateStore(store);
+            }
+
             if (isRealTimeTopicRequired(store, version)) {
               createOrUpdateRealTimeTopics(clusterName, store, version);
             }
@@ -6212,6 +6228,17 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
 
       blobBasedIngestionEnabled
           .ifPresent(aBoolean -> storeMetadataUpdate(clusterName, storeName, (store, resources) -> {
+            if (aBoolean) {
+              if (store.getHybridStoreConfig() != null) {
+                throw new VeniceException("blobBasedIngestionEnabled requires batch-only store (no hybrid config)");
+              }
+              if (store.isDaVinciPushStatusStoreEnabled()) {
+                throw new VeniceException("blobBasedIngestionEnabled not compatible with DaVinci push status store");
+              }
+              if (store.isIncrementalPushEnabled()) {
+                throw new VeniceException("blobBasedIngestionEnabled not compatible with incremental push");
+              }
+            }
             store.setBlobBasedIngestionEnabled(aBoolean);
             return store;
           }));

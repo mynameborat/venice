@@ -565,6 +565,7 @@ public class AdminExecutionTask implements Callable<Void> {
         .setMigrationDuplicateStore(message.migrationDuplicateStore)
         .setLatestSupersetSchemaId(message.latestSuperSetValueSchemaId)
         .setBlobTransferEnabled(message.blobTransferEnabled)
+        .setBlobBasedIngestionEnabled(message.blobBasedIngestionEnabled)
         .setBlobTransferInServerEnabled(
             message.blobTransferInServerEnabled == null
                 ? ActivationState.NOT_SPECIFIED

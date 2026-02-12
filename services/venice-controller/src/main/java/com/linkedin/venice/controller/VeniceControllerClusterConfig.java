@@ -16,6 +16,8 @@ import static com.linkedin.venice.ConfigKeys.ADMIN_TOPIC_REPLICATION_FACTOR;
 import static com.linkedin.venice.ConfigKeys.ADMIN_TOPIC_SOURCE_REGION;
 import static com.linkedin.venice.ConfigKeys.AGGREGATE_REAL_TIME_SOURCE_REGION;
 import static com.linkedin.venice.ConfigKeys.ALLOW_CLUSTER_WIPE;
+import static com.linkedin.venice.ConfigKeys.BLOB_STORAGE_BASE_URI;
+import static com.linkedin.venice.ConfigKeys.BLOB_STORAGE_TYPE;
 import static com.linkedin.venice.ConfigKeys.CHILD_CLUSTER_ALLOWLIST;
 import static com.linkedin.venice.ConfigKeys.CHILD_CLUSTER_D2_PREFIX;
 import static com.linkedin.venice.ConfigKeys.CHILD_CLUSTER_D2_SERVICE_NAME;
@@ -689,6 +691,9 @@ public class VeniceControllerClusterConfig {
 
   private final int systemStoreVersionRetentionCount;
 
+  private final String blobStorageType;
+  private final String blobStorageBaseUri;
+
   public VeniceControllerClusterConfig(VeniceProperties props) {
     this.props = props;
     this.clusterName = props.getString(CLUSTER_NAME);
@@ -1295,6 +1300,9 @@ public class VeniceControllerClusterConfig {
         props.getInt(USER_STORE_VERSION_RETENTION_COUNT, DEFAULT_USER_STORE_VERSION_RETENTION_COUNT);
     this.systemStoreVersionRetentionCount =
         props.getInt(SYSTEM_STORE_VERSION_RETENTION_COUNT, DEFAULT_SYSTEM_STORE_VERSION_RETENTION_COUNT);
+
+    this.blobStorageType = props.getString(BLOB_STORAGE_TYPE, "");
+    this.blobStorageBaseUri = props.getString(BLOB_STORAGE_BASE_URI, "");
 
     this.logClusterConfig();
   }
@@ -2448,5 +2456,13 @@ public class VeniceControllerClusterConfig {
 
   public LogContext getLogContext() {
     return logContext;
+  }
+
+  public String getBlobStorageType() {
+    return blobStorageType;
+  }
+
+  public String getBlobStorageBaseUri() {
+    return blobStorageBaseUri;
   }
 }
