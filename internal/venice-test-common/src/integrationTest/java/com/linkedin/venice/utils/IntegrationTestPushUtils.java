@@ -408,6 +408,7 @@ public class IntegrationTestPushUtils {
   }
 
   public static void updateStore(String veniceClusterName, Properties props, UpdateStoreQueryParams params) {
+    LOGGER.info("Update to store triggered with params: {}", params);
     try (ControllerClient controllerClient = getControllerClient(veniceClusterName, props)) {
       ControllerResponse updateStoreResponse =
           controllerClient.retryableRequest(5, c -> c.updateStore(props.getProperty(VENICE_STORE_NAME_PROP), params));

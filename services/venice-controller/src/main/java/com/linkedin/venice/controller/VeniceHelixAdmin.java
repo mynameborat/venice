@@ -3363,7 +3363,7 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
              *  is still required since child controllers need to create a topic locally, and parent controller uses
              *  local VT to determine whether there is any ongoing offline push.
              */
-            if (multiClusterConfigs.isParent() && version.isNativeReplicationEnabled()
+            if (!pushType.isBatchBlob() && multiClusterConfigs.isParent() && version.isNativeReplicationEnabled()
                 && !version.getPushStreamSourceAddress().equals(getKafkaBootstrapServers(isSslToKafka()))) {
               if (sourceKafkaBootstrapServers == null) {
                 throw new VeniceException(
@@ -3395,7 +3395,7 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
               constructViewResources(veniceViewProperties, store, version, compressionDictionary);
             }
 
-            if (sendStartOfPush) {
+            if (sendStartOfPush && !pushType.isBatchBlob()) {
               long sendStartOfPushTimestamp = System.currentTimeMillis();
               ByteBuffer compressionDictionaryBuffer = null;
               if (compressionDictionary != null) {

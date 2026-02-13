@@ -29,10 +29,28 @@ public class LocalFsBlobStorageClient implements BlobStorageClient {
   public BlobTransferResult download(String remotePath, String localPath) throws IOException {
     Path src = Paths.get(remotePath);
     Path dst = Paths.get(localPath);
-    Files.createDirectories(dst.getParent());
-    Files.copy(src, dst, StandardCopyOption.REPLACE_EXISTING);
-    long bytes = Files.size(dst);
-    return new BlobTransferResult(localPath, bytes, true, null);
+    if (Files.isDirectory(src)) {
+      // Copy all files from the source directory into the destination directory
+      Files.createDirectories(dst);
+      long[] totalBytes = { 0 };
+      Files.walkFileTree(src, new SimpleFileVisitor<Path>() {
+        @Override
+        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+          Path relative = src.relativize(file);
+          Path target = dst.resolve(relative);
+          Files.createDirectories(target.getParent());
+          Files.copy(file, target, StandardCopyOption.REPLACE_EXISTING);
+          totalBytes[0] += Files.size(target);
+          return FileVisitResult.CONTINUE;
+        }
+      });
+      return new BlobTransferResult(localPath, totalBytes[0], true, null);
+    } else {
+      Files.createDirectories(dst.getParent());
+      Files.copy(src, dst, StandardCopyOption.REPLACE_EXISTING);
+      long bytes = Files.size(dst);
+      return new BlobTransferResult(localPath, bytes, true, null);
+    }
   }
 
   @Override

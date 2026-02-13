@@ -367,15 +367,19 @@ public class HelixParticipationService extends AbstractVeniceService
 
     // Record replica status in Zookeeper.
     // Need to be started before connecting to ZK, otherwise some notification will not be sent by this notifier.
+    // Share a single HelixAdapterSerializer so both accessors register their serializers in the same instance.
+    // Using separate instances causes the second setZkSerializer() call to overwrite the first, losing
+    // the offline push path serializers.
+    HelixAdapterSerializer adapterSerializer = new HelixAdapterSerializer();
     veniceOfflinePushMonitorAccessor = new VeniceOfflinePushMonitorAccessor(
         clusterName,
         zkClient,
-        new HelixAdapterSerializer(),
+        adapterSerializer,
         veniceServerConfig.getLogContext(),
         veniceConfigLoader.getVeniceClusterConfig().getRefreshAttemptsForZkReconnect());
 
     PushControlSignalAccessor pushControlSignalAccessor =
-        new VenicePushControlSignalAccessor(clusterName, zkClient, new HelixAdapterSerializer());
+        new VenicePushControlSignalAccessor(clusterName, zkClient, adapterSerializer);
     ((DefaultIngestionBackend) ingestionBackend).setPushControlSignalAccessor(pushControlSignalAccessor);
 
     /**

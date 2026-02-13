@@ -7,7 +7,6 @@ import com.linkedin.davinci.storage.StorageService;
 import com.linkedin.davinci.store.AbstractStoragePartition;
 import com.linkedin.davinci.store.rocksdb.RocksDBStoragePartition;
 import com.linkedin.venice.blobtransfer.storage.BlobStorageClient;
-import com.linkedin.venice.blobtransfer.storage.BlobStoragePaths;
 import com.linkedin.venice.blobtransfer.storage.BlobStorageType;
 import com.linkedin.venice.blobtransfer.storage.LocalFsBlobStorageClient;
 import com.linkedin.venice.exceptions.VeniceException;
@@ -177,7 +176,8 @@ public class BlobIngestionTask implements Runnable {
    * Download SST files from blob storage to a local temp directory with retry logic.
    */
   List<String> downloadSSTFiles() throws IOException {
-    String remotePartitionDir = BlobStoragePaths.partitionDir(blobStorageUri, storeName, versionNumber, partition);
+    // blobStorageUri is already the version dir (e.g., baseUri/storeName/v1), so just append /p{partition}
+    String remotePartitionDir = blobStorageUri + "/p" + partition;
     String localTempDir = RocksDBUtils.composeTempSSTFileDir(serverConfig.getRocksDBPath(), kafkaTopic, partition);
 
     File localTempDirFile = new File(localTempDir);

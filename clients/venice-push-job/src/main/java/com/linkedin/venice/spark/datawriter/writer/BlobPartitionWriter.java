@@ -4,13 +4,10 @@ import static com.linkedin.venice.spark.SparkConstants.KEY_COLUMN_NAME;
 import static com.linkedin.venice.spark.SparkConstants.VALUE_COLUMN_NAME;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_SST_TABLE_FORMAT;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_STORAGE_BASE_URI;
-import static com.linkedin.venice.vpj.VenicePushJobConstants.TOPIC_PROP;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.VALUE_SCHEMA_ID_PROP;
 
 import com.linkedin.venice.blobtransfer.storage.BlobStorageClient;
-import com.linkedin.venice.blobtransfer.storage.BlobStoragePaths;
 import com.linkedin.venice.exceptions.VeniceException;
-import com.linkedin.venice.meta.Version;
 import com.linkedin.venice.spark.datawriter.task.DataWriterAccumulators;
 import com.linkedin.venice.spark.datawriter.task.SparkDataWriterTaskTracker;
 import com.linkedin.venice.utils.ByteUtils;
@@ -59,8 +56,6 @@ public class BlobPartitionWriter implements Closeable {
   private final BlobStorageClient blobStorageClient;
   private final SparkDataWriterTaskTracker taskTracker;
   private final int valueSchemaId;
-  private final String storeName;
-  private final int versionNumber;
   private final String blobStorageBaseUri;
   private final String sstTableFormat;
   private final int partitionId;
@@ -77,9 +72,6 @@ public class BlobPartitionWriter implements Closeable {
     this.taskTracker = new SparkDataWriterTaskTracker(accumulators);
 
     this.valueSchemaId = Integer.parseInt(jobProperties.getProperty(VALUE_SCHEMA_ID_PROP));
-    String topic = jobProperties.getProperty(TOPIC_PROP);
-    this.storeName = Version.parseStoreFromKafkaTopicName(topic);
-    this.versionNumber = Version.parseVersionFromKafkaTopicName(topic);
     this.blobStorageBaseUri = jobProperties.getProperty(BLOB_STORAGE_BASE_URI);
     this.sstTableFormat = jobProperties.getProperty(BLOB_SST_TABLE_FORMAT, "BLOCK_BASED_TABLE");
     this.partitionId = TaskContext.get().partitionId();
@@ -160,8 +152,8 @@ public class BlobPartitionWriter implements Closeable {
   }
 
   private void uploadSstFile() throws IOException {
-    String remotePath =
-        BlobStoragePaths.sstFile(blobStorageBaseUri, storeName, versionNumber, partitionId, SST_FILE_NAME);
+    // blobStorageBaseUri is already the version dir (e.g., baseUri/storeName/v1), so just append /p{partition}/{file}
+    String remotePath = blobStorageBaseUri + "/p" + partitionId + "/" + SST_FILE_NAME;
     LOGGER.info("Uploading SST file for partition {} to {}", partitionId, remotePath);
     blobStorageClient.upload(tempSstFile.getAbsolutePath(), remotePath);
     LOGGER.info("Successfully uploaded SST file for partition {}", partitionId);
