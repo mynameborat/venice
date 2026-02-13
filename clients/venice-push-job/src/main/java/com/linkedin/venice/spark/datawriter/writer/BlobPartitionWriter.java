@@ -2,8 +2,10 @@ package com.linkedin.venice.spark.datawriter.writer;
 
 import static com.linkedin.venice.spark.SparkConstants.KEY_COLUMN_NAME;
 import static com.linkedin.venice.spark.SparkConstants.VALUE_COLUMN_NAME;
+import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_SST_FILE_SIZE_THRESHOLD_BYTES;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_SST_TABLE_FORMAT;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_STORAGE_BASE_URI;
+import static com.linkedin.venice.vpj.VenicePushJobConstants.DEFAULT_BLOB_SST_FILE_SIZE_THRESHOLD_BYTES;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.VALUE_SCHEMA_ID_PROP;
 
 import com.linkedin.venice.blobtransfer.storage.BlobStorageClient;
@@ -15,6 +17,7 @@ import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Objects;
 import java.util.Properties;
@@ -48,10 +51,11 @@ import org.rocksdb.SstFileWriter;
  */
 public class BlobPartitionWriter implements Closeable {
   private static final Logger LOGGER = LogManager.getLogger(BlobPartitionWriter.class);
-  private static final String SST_FILE_NAME = "data_0.sst";
   private static final int SCHEMA_ID_PREFIX_SIZE = 4;
-
   private static final String PLAIN_TABLE = "PLAIN_TABLE";
+
+  /** Check SST file size every N records to amortize the JNI overhead of fileSize(). */
+  static final int FILE_SIZE_CHECK_INTERVAL = 1000;
 
   private final BlobStorageClient blobStorageClient;
   private final SparkDataWriterTaskTracker taskTracker;
@@ -59,10 +63,16 @@ public class BlobPartitionWriter implements Closeable {
   private final String blobStorageBaseUri;
   private final String sstTableFormat;
   private final int partitionId;
+  private final long sstFileSizeThresholdBytes;
 
   private SstFileWriter sstFileWriter;
   private File tempSstFile;
   private boolean sstFileHasData;
+  private int currentSstFileIndex;
+  private int sstFileCount;
+
+  /** Reusable buffer for prepending schema ID to values, avoiding per-record allocation. */
+  private byte[] reusableValueBuffer = new byte[4096];
 
   public BlobPartitionWriter(
       Properties jobProperties,
@@ -74,16 +84,33 @@ public class BlobPartitionWriter implements Closeable {
     this.valueSchemaId = Integer.parseInt(jobProperties.getProperty(VALUE_SCHEMA_ID_PROP));
     this.blobStorageBaseUri = jobProperties.getProperty(BLOB_STORAGE_BASE_URI);
     this.sstTableFormat = jobProperties.getProperty(BLOB_SST_TABLE_FORMAT, "BLOCK_BASED_TABLE");
+    this.sstFileSizeThresholdBytes = Long.parseLong(
+        jobProperties.getProperty(
+            BLOB_SST_FILE_SIZE_THRESHOLD_BYTES,
+            String.valueOf(DEFAULT_BLOB_SST_FILE_SIZE_THRESHOLD_BYTES)));
     this.partitionId = TaskContext.get().partitionId();
   }
 
   /**
-   * Process all rows for this partition: write them to an SST file and upload to blob storage.
+   * Process all rows for this partition: write them to SST file(s) and upload to blob storage.
    * Values are prefixed with a 4-byte schema ID in Venice's RocksDB format: [schema_id][payload].
+   *
+   * <p>SST splitting preserves key ordering because rows arrive pre-sorted by
+   * {@code repartitionAndSortWithinPartitions()} and files are split sequentially.
+   * File N's last key &lt; file N+1's first key.
+   *
+   * <p>When the current SST file exceeds {@code sstFileSizeThresholdBytes} (checked every
+   * {@value #FILE_SIZE_CHECK_INTERVAL} records via {@code SstFileWriter.fileSize()}), the file
+   * is finished, uploaded, and deleted before a new SST file is started. This bounds executor
+   * disk usage and eliminates all-or-nothing upload failure for large partitions.
    */
   public void processRows(Iterator<Row> rows) throws IOException {
     try {
+      currentSstFileIndex = 0;
+      sstFileCount = 0;
       createSstFileWriter();
+
+      int recordsSinceLastSizeCheck = 0;
 
       while (rows.hasNext()) {
         Row row = rows.next();
@@ -95,27 +122,56 @@ public class BlobPartitionWriter implements Closeable {
           continue;
         }
 
-        // Prepend 4-byte schema ID to value: [schema_id][payload]
-        byte[] prefixedValue = prependSchemaId(value, valueSchemaId);
+        // Prepend 4-byte schema ID to value using reusable buffer to avoid per-record allocation
+        int prefixedValueLength = SCHEMA_ID_PREFIX_SIZE + value.length;
+        reusableValueBuffer = prependSchemaIdReusable(value, valueSchemaId, reusableValueBuffer);
 
-        sstFileWriter.put(key, prefixedValue);
+        // SstFileWriter.put(byte[], byte[]) uses the full array length, so we must
+        // pass an exact-sized array. When value sizes are uniform (common case), the
+        // buffer stabilizes and this branch is a no-op after the first few records.
+        byte[] putValue = (reusableValueBuffer.length == prefixedValueLength)
+            ? reusableValueBuffer
+            : Arrays.copyOf(reusableValueBuffer, prefixedValueLength);
+        sstFileWriter.put(key, putValue);
         sstFileHasData = true;
 
         taskTracker.trackKeySize(key.length);
-        taskTracker.trackUncompressedValueSize(prefixedValue.length);
+        taskTracker.trackUncompressedValueSize(prefixedValueLength);
         taskTracker.trackRecordSentToPubSub();
+
+        // Periodically check actual on-disk SST size to decide whether to split
+        recordsSinceLastSizeCheck++;
+        if (recordsSinceLastSizeCheck >= FILE_SIZE_CHECK_INTERVAL) {
+          recordsSinceLastSizeCheck = 0;
+          if (sstFileWriter.fileSize() >= sstFileSizeThresholdBytes) {
+            finishAndUploadCurrentSstFile();
+            currentSstFileIndex++;
+            createSstFileWriter();
+          }
+        }
       }
 
-      // Finish and upload if we wrote any data
+      // Finish and upload the last file if it has data
       if (sstFileHasData) {
-        sstFileWriter.finish();
-        uploadSstFile();
-      } else {
+        finishAndUploadCurrentSstFile();
+      } else if (sstFileCount == 0) {
         LOGGER.info("Partition {} has no data, skipping SST file upload", partitionId);
       }
+
+      LOGGER.info("Partition {} produced {} SST file(s)", partitionId, sstFileCount);
     } catch (RocksDBException e) {
       throw new VeniceException("Failed to write SST file for partition " + partitionId, e);
     }
+  }
+
+  /**
+   * Finish the current SST file, upload it to blob storage, and delete the local temp file.
+   */
+  private void finishAndUploadCurrentSstFile() throws IOException, RocksDBException {
+    sstFileWriter.finish();
+    uploadSstFile(currentSstFileIndex);
+    sstFileCount++;
+    deleteTempSstFile();
   }
 
   /**
@@ -127,6 +183,21 @@ public class BlobPartitionWriter implements Closeable {
     ByteUtils.writeInt(result, schemaId, 0);
     System.arraycopy(value, 0, result, SCHEMA_ID_PREFIX_SIZE, value.length);
     return result;
+  }
+
+  /**
+   * Prepend a 4-byte schema ID to value using a reusable buffer to avoid per-record allocation.
+   * The buffer grows monotonically — once it reaches the max value size for the store, no further
+   * allocations occur. Returns the (possibly grown) buffer.
+   */
+  static byte[] prependSchemaIdReusable(byte[] value, int schemaId, byte[] buffer) {
+    int requiredSize = SCHEMA_ID_PREFIX_SIZE + value.length;
+    if (buffer.length < requiredSize) {
+      buffer = new byte[Math.max(requiredSize, buffer.length * 2)];
+    }
+    ByteUtils.writeInt(buffer, schemaId, 0);
+    System.arraycopy(value, 0, buffer, SCHEMA_ID_PREFIX_SIZE, value.length);
+    return buffer;
   }
 
   private void createSstFileWriter() throws IOException, RocksDBException {
@@ -151,12 +222,35 @@ public class BlobPartitionWriter implements Closeable {
         sstTableFormat);
   }
 
-  private void uploadSstFile() throws IOException {
+  private void uploadSstFile(int fileIndex) throws IOException {
+    String fileName = composeSstFileName(fileIndex);
     // blobStorageBaseUri is already the version dir (e.g., baseUri/storeName/v1), so just append /p{partition}/{file}
-    String remotePath = blobStorageBaseUri + "/p" + partitionId + "/" + SST_FILE_NAME;
-    LOGGER.info("Uploading SST file for partition {} to {}", partitionId, remotePath);
+    String remotePath = blobStorageBaseUri + "/p" + partitionId + "/" + fileName;
+    LOGGER.info("Uploading SST file {} for partition {} to {}", fileName, partitionId, remotePath);
     blobStorageClient.upload(tempSstFile.getAbsolutePath(), remotePath);
-    LOGGER.info("Successfully uploaded SST file for partition {}", partitionId);
+    LOGGER.info("Successfully uploaded SST file {} for partition {}", fileName, partitionId);
+  }
+
+  /**
+   * Compose the SST file name for a given file index.
+   * Files are named data_0.sst, data_1.sst, etc.
+   */
+  static String composeSstFileName(int index) {
+    return "data_" + index + ".sst";
+  }
+
+  private void deleteTempSstFile() {
+    if (tempSstFile != null && tempSstFile.exists()) {
+      if (!tempSstFile.delete()) {
+        LOGGER.warn("Failed to delete temp SST file: {}", tempSstFile.getAbsolutePath());
+      }
+      tempSstFile = null;
+    }
+  }
+
+  /** Returns the total number of SST files produced by {@link #processRows}. */
+  int getSstFileCount() {
+    return sstFileCount;
   }
 
   @Override
@@ -164,11 +258,7 @@ public class BlobPartitionWriter implements Closeable {
     if (sstFileWriter != null) {
       sstFileWriter.close();
     }
-    if (tempSstFile != null && tempSstFile.exists()) {
-      if (!tempSstFile.delete()) {
-        LOGGER.warn("Failed to delete temp SST file: {}", tempSstFile.getAbsolutePath());
-      }
-    }
+    deleteTempSstFile();
     taskTracker.trackPartitionWriterClose();
   }
 }

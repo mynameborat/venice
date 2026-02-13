@@ -14,6 +14,7 @@ import static com.linkedin.venice.utils.ByteUtils.generateHumanReadableByteCount
 import static com.linkedin.venice.vpj.VenicePushJobConstants.ALLOW_DUPLICATE_KEY;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.ALLOW_REGULAR_PUSH_WITH_TTL_REPUSH;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.BATCH_NUM_BYTES_PROP;
+import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_SST_FILE_SIZE_THRESHOLD_BYTES;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.COMPLIANCE_PUSH;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.COMPRESSION_DICTIONARY_SAMPLE_SIZE;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.COMPRESSION_DICTIONARY_SIZE_LIMIT;
@@ -22,6 +23,7 @@ import static com.linkedin.venice.vpj.VenicePushJobConstants.CONTROLLER_REQUEST_
 import static com.linkedin.venice.vpj.VenicePushJobConstants.D2_ZK_HOSTS_PREFIX;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.DATA_WRITER_COMPUTE_JOB_CLASS;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.DEFAULT_BATCH_BYTES_SIZE;
+import static com.linkedin.venice.vpj.VenicePushJobConstants.DEFAULT_BLOB_SST_FILE_SIZE_THRESHOLD_BYTES;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.DEFAULT_COMPRESSION_DICTIONARY_SAMPLE_SIZE;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.DEFAULT_COMPRESSION_METRIC_COLLECTION_ENABLED;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.DEFAULT_EXTENDED_SCHEMA_VALIDITY_CHECK_ENABLED;
@@ -2472,6 +2474,12 @@ public class VenicePushJob implements AutoCloseable {
     setting.blobStorageUri = versionCreationResponse.getBlobStorageUri();
     setting.blobStorageType = versionCreationResponse.getBlobStorageType();
     setting.blobSstTableFormat = versionCreationResponse.getBlobSstTableFormat();
+    setting.blobSstFileSizeThresholdBytes =
+        props.getLong(BLOB_SST_FILE_SIZE_THRESHOLD_BYTES, DEFAULT_BLOB_SST_FILE_SIZE_THRESHOLD_BYTES);
+    if (setting.blobSstFileSizeThresholdBytes <= 0) {
+      throw new VeniceException(
+          BLOB_SST_FILE_SIZE_THRESHOLD_BYTES + " must be > 0, got: " + setting.blobSstFileSizeThresholdBytes);
+    }
 
     if (setting.blobBasedPush) {
       setting.dataWriterComputeJobClass = BlobDataWriterSparkJob.class;

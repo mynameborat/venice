@@ -22,6 +22,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import org.apache.helix.zookeeper.zkclient.IZkDataListener;
@@ -59,6 +63,10 @@ public class BlobIngestionTask implements Runnable {
   private final VeniceServerConfig serverConfig;
   private final int downloadMaxRetries;
   private final long pollIntervalMs;
+  private final Semaphore downloadSemaphore;
+  private final long downloadJitterMaxMs;
+  private final ExecutorService ingestExecutor;
+  private final Semaphore pendingIngestSemaphore;
 
   public BlobIngestionTask(
       String storeName,
@@ -71,7 +79,11 @@ public class BlobIngestionTask implements Runnable {
       VeniceStoreVersionConfig storeConfig,
       Supplier<StoreVersionState> svsSupplier,
       Queue<VeniceNotifier> notifiers,
-      VeniceServerConfig serverConfig) {
+      VeniceServerConfig serverConfig,
+      Semaphore downloadSemaphore,
+      long downloadJitterMaxMs,
+      ExecutorService ingestExecutor,
+      Semaphore pendingIngestSemaphore) {
     this.storeName = storeName;
     this.versionNumber = versionNumber;
     this.partition = partition;
@@ -86,6 +98,10 @@ public class BlobIngestionTask implements Runnable {
     this.serverConfig = serverConfig;
     this.downloadMaxRetries = serverConfig.getBlobIngestionDownloadMaxRetries();
     this.pollIntervalMs = serverConfig.getBlobIngestionPollIntervalMs();
+    this.downloadSemaphore = downloadSemaphore;
+    this.downloadJitterMaxMs = downloadJitterMaxMs;
+    this.ingestExecutor = ingestExecutor;
+    this.pendingIngestSemaphore = pendingIngestSemaphore;
   }
 
   @Override
@@ -99,13 +115,17 @@ public class BlobIngestionTask implements Runnable {
       // Step 2: Wait for blob upload complete signal
       waitForBlobUploadComplete();
 
-      // Step 3: Download SST files
-      List<String> sstFilePaths = downloadSSTFiles();
+      // Step 3: Apply random jitter to spread download starts across the fleet
+      applyDownloadJitter();
 
-      // Step 4: Ingest SST files into RocksDB
-      ingestSSTFiles(sstFilePaths);
+      // Step 4: Download SST files (with concurrency cap via semaphore)
+      List<String> sstFilePaths = downloadWithConcurrencyLimit();
 
-      // Step 5: Report completion
+      // Step 5: Acquire pending-ingest permit (backpressure: prevents downloads from getting too far ahead)
+      // Step 6: Submit ingest to the dedicated ingest pool and wait for completion
+      submitAndAwaitIngest(sstFilePaths);
+
+      // Step 7: Report completion
       reportEndOfPushReceived();
       reportCompleted();
 
@@ -169,6 +189,83 @@ public class BlobIngestionTask implements Runnable {
       throw new InterruptedException("Interrupted while waiting for BLOB_UPLOAD_COMPLETE signal for " + kafkaTopic);
     } finally {
       pushControlSignalAccessor.unsubscribePushControlSignalChange(kafkaTopic, listener);
+    }
+  }
+
+  /**
+   * Submit the ingest task to the dedicated ingest executor, with backpressure via
+   * {@code pendingIngestSemaphore}. The semaphore is acquired before submission and released
+   * after ingest completes (or fails), preventing the download pool from queuing unbounded
+   * ingest work when downloads are faster than ingestion.
+   *
+   * <p>If no ingest executor is configured (null), ingest runs inline on the current thread.
+   */
+  void submitAndAwaitIngest(List<String> sstFilePaths) throws Exception {
+    if (ingestExecutor == null) {
+      // Inline ingest (no pool separation)
+      ingestSSTFiles(sstFilePaths);
+      return;
+    }
+
+    if (pendingIngestSemaphore != null) {
+      LOGGER.info(
+          "Waiting for pending-ingest permit for {} partition {} ({} available)",
+          kafkaTopic,
+          partition,
+          pendingIngestSemaphore.availablePermits());
+      pendingIngestSemaphore.acquire();
+    }
+    try {
+      Future<?> ingestFuture = ingestExecutor.submit(() -> ingestSSTFiles(sstFilePaths));
+      // Block the download thread until ingest completes, propagating any exception
+      ingestFuture.get();
+    } catch (java.util.concurrent.ExecutionException e) {
+      // Unwrap the cause thrown by ingestSSTFiles
+      Throwable cause = e.getCause();
+      if (cause instanceof Exception) {
+        throw (Exception) cause;
+      }
+      throw new VeniceException("Ingest failed for " + kafkaTopic + " partition " + partition, cause);
+    } finally {
+      if (pendingIngestSemaphore != null) {
+        pendingIngestSemaphore.release();
+      }
+    }
+  }
+
+  /**
+   * Apply a random jitter delay before starting the download. This spreads download starts
+   * across the fleet when BLOB_UPLOAD_COMPLETE fires for all partitions simultaneously,
+   * preventing a thundering herd of concurrent download requests.
+   */
+  void applyDownloadJitter() throws InterruptedException {
+    if (downloadJitterMaxMs > 0) {
+      long jitterMs = ThreadLocalRandom.current().nextLong(downloadJitterMaxMs);
+      LOGGER.info("Applying {} ms download jitter for {} partition {}", jitterMs, kafkaTopic, partition);
+      Thread.sleep(jitterMs);
+    }
+  }
+
+  /**
+   * Download SST files with a concurrency cap. Acquires a permit from the shared download
+   * semaphore before downloading and releases it after download completes (not after ingest),
+   * bounding the number of concurrent downloads across all partitions on this server.
+   */
+  List<String> downloadWithConcurrencyLimit() throws IOException, InterruptedException {
+    if (downloadSemaphore != null) {
+      LOGGER.info(
+          "Waiting for download permit for {} partition {} ({} available)",
+          kafkaTopic,
+          partition,
+          downloadSemaphore.availablePermits());
+      downloadSemaphore.acquire();
+    }
+    try {
+      return downloadSSTFiles();
+    } finally {
+      if (downloadSemaphore != null) {
+        downloadSemaphore.release();
+      }
     }
   }
 

@@ -62,8 +62,16 @@ public class DefaultIngestionBackend implements IngestionBackend {
       new VeniceConcurrentHashMap<>();
   private final BlobTransferManager blobTransferManager;
   private final boolean isIsolatedIngestion;
-  private final ExecutorService blobIngestionExecutor;
+  /** Download pool: I/O-bound (network + disk write). Larger pool for parallelism. */
+  private final ExecutorService blobDownloadExecutor;
+  /** Ingest pool: CPU/disk-bound (RocksDB SST ingest). Smaller pool to avoid I/O contention. */
+  private final ExecutorService blobIngestExecutor;
   private final Map<String, Future<?>> blobIngestionFutures = new VeniceConcurrentHashMap<>();
+  /** Limits concurrent blob downloads across all partitions on this server. null means no limit. */
+  private final java.util.concurrent.Semaphore downloadSemaphore;
+  /** Backpressure semaphore: prevents download pool from getting too far ahead of ingest pool. */
+  private final java.util.concurrent.Semaphore pendingIngestSemaphore;
+  private final long blobIngestionDownloadJitterMaxMs;
   private PushControlSignalAccessor pushControlSignalAccessor;
 
   // Per-replica locks to ensure mutual exclusion between blob transfer triggerred consumption start and cancel
@@ -85,9 +93,18 @@ public class DefaultIngestionBackend implements IngestionBackend {
     this.blobTransferManager = blobTransferManager;
     this.serverConfig = serverConfig;
     this.isIsolatedIngestion = serverConfig != null && IngestionMode.ISOLATED.equals(serverConfig.getIngestionMode());
-    int blobIngestionPoolSize = serverConfig != null ? serverConfig.getBlobIngestionMaxConcurrentTasks() : 4;
-    this.blobIngestionExecutor =
-        Executors.newFixedThreadPool(blobIngestionPoolSize, new DaemonThreadFactory("blob-ingestion"));
+    int downloadPoolSize = serverConfig != null ? serverConfig.getBlobIngestionDownloadPoolSize() : 8;
+    int ingestPoolSize = serverConfig != null ? serverConfig.getBlobIngestionIngestPoolSize() : 4;
+    this.blobDownloadExecutor =
+        Executors.newFixedThreadPool(downloadPoolSize, new DaemonThreadFactory("blob-download"));
+    this.blobIngestExecutor = Executors.newFixedThreadPool(ingestPoolSize, new DaemonThreadFactory("blob-ingest"));
+    int maxConcurrentDownloads = serverConfig != null ? serverConfig.getBlobIngestionMaxConcurrentDownloads() : 8;
+    this.downloadSemaphore =
+        maxConcurrentDownloads > 0 ? new java.util.concurrent.Semaphore(maxConcurrentDownloads) : null;
+    // Backpressure: allow at most 2x the ingest pool size to be pending, preventing unbounded download queue
+    this.pendingIngestSemaphore = new java.util.concurrent.Semaphore(ingestPoolSize * 2);
+    this.blobIngestionDownloadJitterMaxMs =
+        serverConfig != null ? serverConfig.getBlobIngestionDownloadJitterMaxMs() : 5000L;
   }
 
   @Override
@@ -668,10 +685,26 @@ public class DefaultIngestionBackend implements IngestionBackend {
 
   @Override
   public void close() {
-    if (blobIngestionExecutor != null) {
-      blobIngestionExecutor.shutdownNow();
-    }
+    shutdownExecutor(blobDownloadExecutor, "blob-download");
+    shutdownExecutor(blobIngestExecutor, "blob-ingest");
     blobIngestionFutures.clear();
+  }
+
+  private static void shutdownExecutor(ExecutorService executor, String name) {
+    if (executor == null) {
+      return;
+    }
+    executor.shutdown();
+    try {
+      if (!executor.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS)) {
+        LOGGER.warn("{} pool did not terminate gracefully, forcing shutdown", name);
+        executor.shutdownNow();
+      }
+    } catch (InterruptedException e) {
+      LOGGER.warn("{} pool shutdown interrupted, forcing shutdown", name);
+      executor.shutdownNow();
+      Thread.currentThread().interrupt();
+    }
   }
 
   private void cancelBlobIngestionFuturesForTopic(String topicName) {
@@ -732,11 +765,15 @@ public class DefaultIngestionBackend implements IngestionBackend {
         storeConfig,
         svsSupplier,
         notifiers,
-        serverConfig);
+        serverConfig,
+        downloadSemaphore,
+        blobIngestionDownloadJitterMaxMs,
+        blobIngestExecutor,
+        pendingIngestSemaphore);
 
     String replicaId = Utils.getReplicaId(kafkaTopic, partition);
     LOGGER.info("Submitting blob ingestion task for {} partition {}", kafkaTopic, partition);
-    Future<?> future = blobIngestionExecutor.submit(task);
+    Future<?> future = blobDownloadExecutor.submit(task);
     blobIngestionFutures.put(replicaId, future);
   }
 

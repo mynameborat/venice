@@ -4,7 +4,11 @@ import static com.linkedin.davinci.stats.ingestion.heartbeat.HeartbeatMonitoring
 import static com.linkedin.venice.ConfigConstants.DEFAULT_MAX_RECORD_SIZE_BYTES_BACKFILL;
 import static com.linkedin.venice.ConfigKeys.ACL_IN_MEMORY_CACHE_TTL_MS;
 import static com.linkedin.venice.ConfigKeys.AUTOCREATE_DATA_PATH;
+import static com.linkedin.venice.ConfigKeys.BLOB_INGESTION_DOWNLOAD_JITTER_MAX_MS;
 import static com.linkedin.venice.ConfigKeys.BLOB_INGESTION_DOWNLOAD_MAX_RETRIES;
+import static com.linkedin.venice.ConfigKeys.BLOB_INGESTION_DOWNLOAD_POOL_SIZE;
+import static com.linkedin.venice.ConfigKeys.BLOB_INGESTION_INGEST_POOL_SIZE;
+import static com.linkedin.venice.ConfigKeys.BLOB_INGESTION_MAX_CONCURRENT_DOWNLOADS;
 import static com.linkedin.venice.ConfigKeys.BLOB_INGESTION_MAX_CONCURRENT_TASKS;
 import static com.linkedin.venice.ConfigKeys.BLOB_INGESTION_POLL_INTERVAL_MS;
 import static com.linkedin.venice.ConfigKeys.BLOB_RECEIVE_MAX_TIMEOUT_IN_MIN;
@@ -644,6 +648,10 @@ public class VeniceServerConfig extends VeniceClusterConfig {
   private final int blobIngestionDownloadMaxRetries;
   private final long blobIngestionPollIntervalMs;
   private final int blobIngestionMaxConcurrentTasks;
+  private final int blobIngestionDownloadPoolSize;
+  private final int blobIngestionIngestPoolSize;
+  private final long blobIngestionDownloadJitterMaxMs;
+  private final int blobIngestionMaxConcurrentDownloads;
   private final boolean daVinciCurrentVersionBootstrappingSpeedupEnabled;
   private final long daVinciCurrentVersionBootstrappingQuotaRecordsPerSecond;
   private final long daVinciCurrentVersionBootstrappingQuotaBytesPerSecond;
@@ -769,6 +777,12 @@ public class VeniceServerConfig extends VeniceClusterConfig {
     blobIngestionDownloadMaxRetries = serverProperties.getInt(BLOB_INGESTION_DOWNLOAD_MAX_RETRIES, 3);
     blobIngestionPollIntervalMs = serverProperties.getLong(BLOB_INGESTION_POLL_INTERVAL_MS, 5000L);
     blobIngestionMaxConcurrentTasks = serverProperties.getInt(BLOB_INGESTION_MAX_CONCURRENT_TASKS, 4);
+    blobIngestionDownloadPoolSize = Math.max(serverProperties.getInt(BLOB_INGESTION_DOWNLOAD_POOL_SIZE, 8), 1);
+    blobIngestionIngestPoolSize = Math.max(serverProperties.getInt(BLOB_INGESTION_INGEST_POOL_SIZE, 4), 1);
+    blobIngestionDownloadJitterMaxMs =
+        Math.min(Math.max(serverProperties.getLong(BLOB_INGESTION_DOWNLOAD_JITTER_MAX_MS, 5000L), 0), 60000);
+    blobIngestionMaxConcurrentDownloads =
+        Math.min(Math.max(serverProperties.getInt(BLOB_INGESTION_MAX_CONCURRENT_DOWNLOADS, 8), 0), 256);
 
     String lfThreadPoolStrategyStr = serverProperties.getString(
         LEADER_FOLLOWER_STATE_TRANSITION_THREAD_POOL_STRATEGY,
@@ -1326,6 +1340,22 @@ public class VeniceServerConfig extends VeniceClusterConfig {
 
   public int getBlobIngestionMaxConcurrentTasks() {
     return blobIngestionMaxConcurrentTasks;
+  }
+
+  public int getBlobIngestionDownloadPoolSize() {
+    return blobIngestionDownloadPoolSize;
+  }
+
+  public int getBlobIngestionIngestPoolSize() {
+    return blobIngestionIngestPoolSize;
+  }
+
+  public long getBlobIngestionDownloadJitterMaxMs() {
+    return blobIngestionDownloadJitterMaxMs;
+  }
+
+  public int getBlobIngestionMaxConcurrentDownloads() {
+    return blobIngestionMaxConcurrentDownloads;
   }
 
   public int getSnapshotCleanupIntervalInMins() {

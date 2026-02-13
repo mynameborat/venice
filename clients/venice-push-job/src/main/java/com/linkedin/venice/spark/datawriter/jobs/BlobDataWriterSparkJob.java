@@ -1,5 +1,6 @@
 package com.linkedin.venice.spark.datawriter.jobs;
 
+import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_SST_FILE_SIZE_THRESHOLD_BYTES;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_SST_TABLE_FORMAT;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_STORAGE_BASE_URI;
 import static com.linkedin.venice.vpj.VenicePushJobConstants.BLOB_STORAGE_TYPE;
@@ -42,6 +43,8 @@ public class BlobDataWriterSparkJob extends DataWriterSparkJob {
     if (pushJobSetting.blobSstTableFormat != null) {
       getSparkSession().conf().set(BLOB_SST_TABLE_FORMAT, pushJobSetting.blobSstTableFormat);
     }
+    getSparkSession().conf()
+        .set(BLOB_SST_FILE_SIZE_THRESHOLD_BYTES, String.valueOf(pushJobSetting.blobSstFileSizeThresholdBytes));
   }
 
   @Override

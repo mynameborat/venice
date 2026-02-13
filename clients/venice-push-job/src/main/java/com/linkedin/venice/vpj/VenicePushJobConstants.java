@@ -468,4 +468,6 @@ public final class VenicePushJobConstants {
   public static final String BLOB_STORAGE_BASE_URI = "blob.storage.base.uri";
   public static final String BLOB_STORAGE_TYPE = "blob.storage.type";
   public static final String BLOB_SST_TABLE_FORMAT = "blob.sst.table.format";
+  public static final String BLOB_SST_FILE_SIZE_THRESHOLD_BYTES = "blob.sst.file.size.threshold.bytes";
+  public static final long DEFAULT_BLOB_SST_FILE_SIZE_THRESHOLD_BYTES = 64 * 1024 * 1024; // 64MB
 }

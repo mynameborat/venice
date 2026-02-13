@@ -2199,10 +2199,46 @@ public class ConfigKeys {
   public static final String BLOB_SST_TABLE_FORMAT = "blob.sst.table.format";
 
   /**
+   * Maximum SST file size (in bytes) before splitting into a new file during blob-based push.
+   * The push job checks actual on-disk file size via SstFileWriter.fileSize() every ~1000 records.
+   * Default: 67108864 (64MB). Must be > 0.
+   */
+  public static final String BLOB_SST_FILE_SIZE_THRESHOLD_BYTES = "blob.sst.file.size.threshold.bytes";
+
+  /**
    * Maximum number of concurrent blob ingestion tasks (download + ingest) per server.
    * Controls the thread pool size in DefaultIngestionBackend. Default: 4.
+   * @deprecated Use {@link #BLOB_INGESTION_DOWNLOAD_POOL_SIZE} and {@link #BLOB_INGESTION_INGEST_POOL_SIZE} instead.
    */
   public static final String BLOB_INGESTION_MAX_CONCURRENT_TASKS = "blob.ingestion.max.concurrent.tasks";
+
+  /**
+   * Thread pool size for blob download tasks. Downloads are I/O-bound (network + disk write),
+   * so a larger pool allows more partitions to download concurrently.
+   * Actual concurrent downloads are further limited by {@link #BLOB_INGESTION_MAX_CONCURRENT_DOWNLOADS}.
+   * Default: 8.
+   */
+  public static final String BLOB_INGESTION_DOWNLOAD_POOL_SIZE = "blob.ingestion.download.pool.size";
+
+  /**
+   * Thread pool size for blob ingest tasks. Ingestion is CPU/disk-bound (RocksDB SST ingest),
+   * so a smaller pool prevents overwhelming local disk I/O. Default: 4.
+   */
+  public static final String BLOB_INGESTION_INGEST_POOL_SIZE = "blob.ingestion.ingest.pool.size";
+
+  /**
+   * Maximum random jitter delay (in milliseconds) applied before each blob download starts.
+   * Prevents thundering herd when BLOB_UPLOAD_COMPLETE fires for all partitions simultaneously.
+   * Set to 0 to disable jitter. Default: 5000 (5 seconds).
+   */
+  public static final String BLOB_INGESTION_DOWNLOAD_JITTER_MAX_MS = "blob.ingestion.download.jitter.max.ms";
+
+  /**
+   * Maximum number of concurrent blob downloads per server. Controls a shared semaphore that
+   * limits how many partitions can be downloading simultaneously, bounding network and disk I/O.
+   * Set to 0 for no limit. Default: 8. Must be >= 0.
+   */
+  public static final String BLOB_INGESTION_MAX_CONCURRENT_DOWNLOADS = "blob.ingestion.max.concurrent.downloads";
 
   // Port used by peer-to-peer transfer service. It should be used by both server and client
   public static final String DAVINCI_P2P_BLOB_TRANSFER_SERVER_PORT = "davinci.p2p.blob.transfer.server.port";

@@ -179,5 +179,6 @@ public class PushJobSetting implements Serializable {
   public String blobStorageUri;
   public String blobStorageType;
   public String blobSstTableFormat;
+  public long blobSstFileSizeThresholdBytes = 64 * 1024 * 1024; // 64MB default
 
 }
