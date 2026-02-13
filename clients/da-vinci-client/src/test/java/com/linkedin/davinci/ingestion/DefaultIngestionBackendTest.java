@@ -129,6 +129,10 @@ public class DefaultIngestionBackendTest {
     when(blobTransferManager.getAggVersionedBlobTransferStats()).thenReturn(aggVersionedBlobTransferStats);
     when(blobTransferManager.getTransferStatusTrackingManager()).thenReturn(statusTrackingManager);
     when(veniceServerConfig.getBlobIngestionMaxConcurrentTasks()).thenReturn(4);
+    when(veniceServerConfig.getBlobIngestionDownloadPoolSize()).thenReturn(8);
+    when(veniceServerConfig.getBlobIngestionIngestPoolSize()).thenReturn(4);
+    when(veniceServerConfig.getBlobIngestionMaxConcurrentDownloads()).thenReturn(8);
+    when(veniceServerConfig.getBlobIngestionDownloadJitterMaxMs()).thenReturn(5000L);
 
     // Create the DefaultIngestionBackend instance with mocked dependencies
     ingestionBackend = new DefaultIngestionBackend(

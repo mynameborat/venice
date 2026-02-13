@@ -102,7 +102,7 @@ public class TestZkCopier {
           break;
         case CLUSTER_1:
         case CLUSTER_2:
-          Assert.assertEquals(child.getChildren().size(), 6);
+          Assert.assertEquals(child.getChildren().size(), 7);
           testContainsChildAsserts(child);
           for (TreeNode grandchild: child.getChildren().values()) {
             Assert.assertEquals(grandchild.getChildren().size(), 0);

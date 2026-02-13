@@ -1164,6 +1164,10 @@ public class CreateVersionTest {
     when(admin.whetherEnableBatchPushFromAdmin(clusterName, storeName)).thenReturn(true);
     when(admin.calculateNumberOfPartitions(clusterName, storeName)).thenReturn(computedPartitionCount);
 
+    VeniceControllerClusterConfig mockConfig = mock(VeniceControllerClusterConfig.class);
+    when(mockConfig.getBlobSstTableFormat()).thenReturn("PLAIN_TABLE");
+    when(admin.getControllerConfig(clusterName)).thenReturn(mockConfig);
+
     Version version = mock(Version.class);
     when(version.getStoreName()).thenReturn(storeName);
     when(version.getPartitionCount()).thenReturn(computedPartitionCount);
@@ -1201,6 +1205,7 @@ public class CreateVersionTest {
     assertTrue(response.isBlobBasedPush(), "Expected blobBasedPush to be true");
     assertEquals(response.getBlobStorageUri(), "hdfs:///venice/blob/testStore/v11");
     assertEquals(response.getBlobStorageType(), "HDFS");
+    assertEquals(response.getBlobSstTableFormat(), "PLAIN_TABLE");
   }
 
   @Test

@@ -2,6 +2,7 @@ package com.linkedin.venice.controller.kafka.consumer;
 
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.ACCESS_CONTROLLED;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.AMPLIFICATION_FACTOR;
+import static com.linkedin.venice.controllerapi.ControllerApiConstants.BLOB_BASED_INGESTION_ENABLED;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.BOOTSTRAP_TO_ONLINE_TIMEOUT_IN_HOURS;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.ENABLE_READS;
 import static com.linkedin.venice.controllerapi.ControllerApiConstants.ENABLE_STORE_MIGRATION;
@@ -1156,6 +1157,7 @@ public class AdminConsumptionTaskTest {
       setStore.updatedConfigsList.add(AMPLIFICATION_FACTOR);
       setStore.updatedConfigsList.add(PARTITIONER_CLASS);
       setStore.updatedConfigsList.add(PARTITIONER_PARAMS);
+      setStore.updatedConfigsList.add(BLOB_BASED_INGESTION_ENABLED);
     }
 
     AdminOperation adminMessage = new AdminOperation();
