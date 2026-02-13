@@ -33,6 +33,7 @@ import com.linkedin.venice.controller.kafka.protocol.admin.UpdateStore;
 import com.linkedin.venice.controller.kafka.protocol.admin.ValueSchemaCreation;
 import com.linkedin.venice.exceptions.VeniceException;
 import com.linkedin.venice.exceptions.VeniceMessageException;
+import com.linkedin.venice.utils.AvroRecordUtils;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -99,7 +100,7 @@ public enum AdminMessageType {
       case SET_STORE_CURRENT_VERSION:
         return new SetStoreCurrentVersion();
       case UPDATE_STORE:
-        return new UpdateStore();
+        return AvroRecordUtils.prefillAvroRecordWithDefaultValue(new UpdateStore());
       case DELETE_STORE:
         return new DeleteStore();
       case DELETE_OLD_VERSION:

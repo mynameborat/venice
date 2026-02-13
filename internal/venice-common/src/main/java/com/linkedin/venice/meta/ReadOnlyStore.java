@@ -1068,6 +1068,7 @@ public class ReadOnlyStore implements Store {
     storeProperties.setBlobTransferEnabled(isBlobTransferEnabled());
     storeProperties.setBlobBasedIngestionEnabled(isBlobBasedIngestionEnabled());
     storeProperties.setBlobTransferInServerEnabled(getBlobTransferInServerEnabled());
+    storeProperties.setBlobDbEnabled("NOT_SPECIFIED");
     storeProperties.setNearlineProducerCompressionEnabled(isNearlineProducerCompressionEnabled());
     storeProperties.setNearlineProducerCountPerWriter(getNearlineProducerCountPerWriter());
     storeProperties.setTargetSwapRegion(getTargetSwapRegion());
@@ -1945,6 +1946,7 @@ public class ReadOnlyStore implements Store {
     storeVersion.setSeparateRealTimeTopicEnabled(version.isSeparateRealTimeTopicEnabled());
     storeVersion.setBlobTransferEnabled(version.isBlobTransferEnabled());
     storeVersion.setBlobTransferInServerEnabled(version.getBlobTransferInServerEnabled());
+    storeVersion.setBlobDbEnabled("NOT_SPECIFIED");
     storeVersion.setUseVersionLevelIncrementalPushEnabled(version.isUseVersionLevelIncrementalPushEnabled());
     storeVersion.setHybridConfig(convertHybridStoreConfig(version.getHybridStoreConfig()));
     storeVersion.setUseVersionLevelHybridConfig(version.isUseVersionLevelHybridConfig());
@@ -1962,8 +1964,8 @@ public class ReadOnlyStore implements Store {
     storeVersion.setKeyUrnFields(version.getKeyUrnFields().stream().map(String::toString).collect(Collectors.toList()));
     storeVersion.setRepushTtlSeconds(version.getRepushTtlSeconds());
     storeVersion.setBlobBasedIngestion(version.isBlobBasedIngestion());
-    storeVersion.setBlobStorageUri(version.getBlobStorageUri());
-    storeVersion.setBlobStorageType(version.getBlobStorageType());
+    storeVersion.setBlobStorageUri(version.getBlobStorageUri() != null ? version.getBlobStorageUri() : "");
+    storeVersion.setBlobStorageType(version.getBlobStorageType() != null ? version.getBlobStorageType() : "");
 
     return storeVersion;
   }
