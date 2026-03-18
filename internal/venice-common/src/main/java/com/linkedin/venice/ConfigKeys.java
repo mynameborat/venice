@@ -2910,6 +2910,38 @@ public class ConfigKeys {
       "server.inactive.topic.partition.checker.threshold.in.seconds";
 
   /**
+   * Config to enable/disable drainer backpressure feature. When enabled, topic partitions whose
+   * drainer queues are near-full will be paused before poll() to prevent head-of-line blocking.
+   * Default is false.
+   */
+  public static final String SERVER_DRAINER_BACKPRESSURE_ENABLED = "server.drainer.backpressure.enabled";
+
+  /**
+   * Fraction of drainer capacity used that triggers pausing a topic partition (0.0 to 1.0).
+   * When remaining capacity falls below (1 - this value), the slowest TP on that drainer is paused.
+   * Default is 0.90 (pause when drainer is 90% full, i.e., remaining < 10%).
+   */
+  public static final String SERVER_DRAINER_BACKPRESSURE_PAUSE_THRESHOLD =
+      "server.drainer.backpressure.pause.threshold";
+
+  /**
+   * Fraction of drainer capacity used below which a previously paused topic partition is resumed (0.0 to 1.0).
+   * When remaining capacity rises above (1 - this value), the TP is resumed.
+   * Default is 0.70 (resume when drainer drops below 70% full, i.e., remaining > 30%).
+   */
+  public static final String SERVER_DRAINER_BACKPRESSURE_RESUME_THRESHOLD =
+      "server.drainer.backpressure.resume.threshold";
+
+  /**
+   * Config to enable/disable inline (pre-poll) drainer backpressure check in ConsumptionTask.
+   * When enabled, each ConsumptionTask checks drainer capacity before calling poll() and
+   * selectively pauses/resumes topic partitions (Samza-style selective polling).
+   * Default is true (when drainer backpressure is enabled).
+   */
+  public static final String SERVER_DRAINER_BACKPRESSURE_INLINE_CHECK_ENABLED =
+      "server.drainer.backpressure.inline.check.enabled";
+
+  /**
    * Config to enable/disable lag based replica auto-resubscribe feature.
    * Default is false as we will plan to roll out step-by-step.
    */

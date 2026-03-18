@@ -465,6 +465,7 @@ public class KafkaStoreIngestionService extends AbstractVeniceService implements
         },
         metadataRepo,
         pubSubContext);
+    aggKafkaConsumerService.setStoreBufferService(storeBufferService);
     /**
      * After initializing a {@link AggKafkaConsumerService} service, it doesn't contain KafkaConsumerService yet until
      * a new Kafka cluster is registered; here we explicitly create KafkaConsumerService for the local Kafka cluster.

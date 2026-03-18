@@ -84,6 +84,7 @@ public class AggKafkaConsumerService extends AbstractVeniceService {
   private final StuckConsumerRepairStats stuckConsumerStats;
   private final ThreadPoolExecutor crossTpProcessingPool;
   private final ThreadPoolStats crossTpProcessingStats;
+  private AbstractStoreBufferService storeBufferService;
 
   private final static String STUCK_CONSUMER_MSG =
       "Didn't find any suspicious ingestion task, and please contact developers to investigate it further";
@@ -166,6 +167,14 @@ public class AggKafkaConsumerService extends AbstractVeniceService {
       this.crossTpProcessingStats = null;
     }
     LOGGER.info("Successfully initialized AggKafkaConsumerService");
+  }
+
+  /**
+   * Sets the store buffer service reference for drainer backpressure support.
+   * Must be called before {@link #createKafkaConsumerService(Properties)} to take effect.
+   */
+  public void setStoreBufferService(AbstractStoreBufferService storeBufferService) {
+    this.storeBufferService = storeBufferService;
   }
 
   /**
@@ -409,7 +418,8 @@ public class AggKafkaConsumerService extends AbstractVeniceService {
                 serverConfig.isUnregisterMetricForDeletedStoreEnabled(),
                 serverConfig,
                 pubSubContext,
-                getCrossTpProcessingPoolForPoolType(poolType)),
+                getCrossTpProcessingPoolForPoolType(poolType),
+                storeBufferService),
             isAAOrWCEnabledFunc));
 
     if (!consumerService.isRunning()) {

@@ -59,7 +59,8 @@ public class PartitionWiseKafkaConsumerService extends KafkaConsumerService {
       final boolean isUnregisterMetricForDeletedStoreEnabled,
       final VeniceServerConfig veniceServerConfig,
       final PubSubContext pubSubContext,
-      final ExecutorService crossTpProcessingPool) {
+      final ExecutorService crossTpProcessingPool,
+      final AbstractStoreBufferService storeBufferService) {
     this(
         poolType,
         consumerProperties,
@@ -80,7 +81,8 @@ public class PartitionWiseKafkaConsumerService extends KafkaConsumerService {
         PartitionWiseKafkaConsumerService.class.toString(),
         veniceServerConfig,
         pubSubContext,
-        crossTpProcessingPool);
+        crossTpProcessingPool,
+        storeBufferService);
   }
 
   PartitionWiseKafkaConsumerService(
@@ -103,7 +105,8 @@ public class PartitionWiseKafkaConsumerService extends KafkaConsumerService {
       final String loggerNamePrefix,
       final VeniceServerConfig veniceServerConfig,
       final PubSubContext pubSubContext,
-      final ExecutorService crossTpProcessingPool) {
+      final ExecutorService crossTpProcessingPool,
+      final AbstractStoreBufferService storeBufferService) {
     super(
         poolType,
         consumerProperties,
@@ -123,7 +126,8 @@ public class PartitionWiseKafkaConsumerService extends KafkaConsumerService {
         isUnregisterMetricForDeletedStoreEnabled,
         veniceServerConfig,
         pubSubContext,
-        crossTpProcessingPool);
+        crossTpProcessingPool,
+        storeBufferService);
     this.LOGGER = LogManager.getLogger(loggerNamePrefix + " [" + kafkaUrlForLogger + "]");
   }
 

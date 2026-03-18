@@ -310,6 +310,7 @@ public class KafkaConsumerServiceDelegatorTest {
         false,
         mockVeniceServerConfig,
         mockPubSubContext,
+        null,
         null);
     String storeName = Utils.getUniqueString("test_consumer_service");
 

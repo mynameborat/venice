@@ -52,7 +52,8 @@ public class StoreAwarePartitionWiseKafkaConsumerService extends PartitionWiseKa
       final boolean isUnregisterMetricForDeletedStoreEnabled,
       final VeniceServerConfig veniceServerConfig,
       final PubSubContext pubSubContext,
-      final ExecutorService crossTpProcessingPool) {
+      final ExecutorService crossTpProcessingPool,
+      final AbstractStoreBufferService storeBufferService) {
     super(
         poolType,
         consumerProperties,
@@ -73,7 +74,8 @@ public class StoreAwarePartitionWiseKafkaConsumerService extends PartitionWiseKa
         StoreAwarePartitionWiseKafkaConsumerService.class.toString(),
         veniceServerConfig,
         pubSubContext,
-        crossTpProcessingPool);
+        crossTpProcessingPool,
+        storeBufferService);
   }
 
   @Override

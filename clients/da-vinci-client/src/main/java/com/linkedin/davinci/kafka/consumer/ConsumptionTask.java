@@ -13,6 +13,7 @@ import com.linkedin.venice.utils.concurrent.VeniceConcurrentHashMap;
 import io.tehuti.metrics.MetricConfig;
 import io.tehuti.metrics.stats.Rate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -20,8 +21,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 import org.apache.logging.log4j.LogManager;
@@ -62,6 +65,21 @@ class ConsumptionTask implements Runnable {
   private final ConsumerPollTracker consumerPollTracker;
   private final ExecutorService crossTpProcessingPool;
 
+  // Drainer backpressure fields (selective polling)
+  private final Consumer<PubSubTopicPartition> pauseFunction;
+  private final Consumer<PubSubTopicPartition> resumeFunction;
+  private final AbstractStoreBufferService storeBufferService;
+  private final double backpressurePauseThreshold;
+  private final double backpressureResumeThreshold;
+  private final boolean backpressureInlineCheckEnabled;
+
+  /**
+   * Set of topic partitions currently paused due to drainer backpressure.
+   * Modified by ConsumptionTask thread (pre-poll check), read by InactiveTopicPartitionChecker (safety net).
+   */
+  private final Set<PubSubTopicPartition> backpressurePausedPartitions =
+      Collections.newSetFromMap(new ConcurrentHashMap<>());
+
   /**
    * Maintain rate counter with default window size to calculate the message and bytes rate at topic partition level.
    * Those topic partition level information will not be emitted out as a metric, to avoid emitting too many metrics per
@@ -93,6 +111,42 @@ class ConsumptionTask implements Runnable {
       final ConsumerSubscriptionCleaner cleaner,
       final ConsumerPollTracker consumerPollTracker,
       final ExecutorService crossTpProcessingPool) {
+    this(
+        consumerNamePrefix,
+        taskId,
+        readCycleDelayMs,
+        pollFunction,
+        bandwidthThrottler,
+        recordsThrottler,
+        aggStats,
+        cleaner,
+        consumerPollTracker,
+        crossTpProcessingPool,
+        null,
+        null,
+        null,
+        0,
+        0,
+        false);
+  }
+
+  public ConsumptionTask(
+      final String consumerNamePrefix,
+      final int taskId,
+      final long readCycleDelayMs,
+      final Supplier<Map<PubSubTopicPartition, List<DefaultPubSubMessage>>> pollFunction,
+      final IntConsumer bandwidthThrottler,
+      final IntConsumer recordsThrottler,
+      final AggKafkaConsumerServiceStats aggStats,
+      final ConsumerSubscriptionCleaner cleaner,
+      final ConsumerPollTracker consumerPollTracker,
+      final ExecutorService crossTpProcessingPool,
+      final Consumer<PubSubTopicPartition> pauseFunction,
+      final Consumer<PubSubTopicPartition> resumeFunction,
+      final AbstractStoreBufferService storeBufferService,
+      final double backpressurePauseThreshold,
+      final double backpressureResumeThreshold,
+      final boolean backpressureInlineCheckEnabled) {
     this.readCycleDelayMs = readCycleDelayMs;
     this.pollFunction = pollFunction;
     this.bandwidthThrottler = bandwidthThrottler;
@@ -101,6 +155,12 @@ class ConsumptionTask implements Runnable {
     this.cleaner = cleaner;
     this.consumerPollTracker = consumerPollTracker;
     this.crossTpProcessingPool = crossTpProcessingPool;
+    this.pauseFunction = pauseFunction;
+    this.resumeFunction = resumeFunction;
+    this.storeBufferService = storeBufferService;
+    this.backpressurePauseThreshold = backpressurePauseThreshold;
+    this.backpressureResumeThreshold = backpressureResumeThreshold;
+    this.backpressureInlineCheckEnabled = backpressureInlineCheckEnabled;
     this.taskId = taskId;
     this.consumptionTaskIdStr = Utils.getSanitizedStringForLogger(consumerNamePrefix) + " - " + taskId;
     this.LOGGER = LogManager.getLogger(getClass().getSimpleName() + "[ " + consumptionTaskIdStr + " ]");
@@ -125,6 +185,7 @@ class ConsumptionTask implements Runnable {
           }
           long beforePollingTimestamp = System.currentTimeMillis();
           processAndClearUnsubscriptions(topicPartitionsToUnsub);
+          applyDrainerBackpressure();
 
           Map<PubSubTopicPartition, List<DefaultPubSubMessage>> polledMessages = pollFunction.get();
           lastSuccessfulPollTimestamp = System.currentTimeMillis();
@@ -265,6 +326,51 @@ class ConsumptionTask implements Runnable {
   private void cleanupUnsubscribedPartitions(Set<PubSubTopicPartition> topicPartitionsToUnsub) {
     cleaner.unsubscribe(topicPartitionsToUnsub);
     aggStats.recordTotalDetectedNoRunningIngestionTopicPartitionNum(topicPartitionsToUnsub.size());
+  }
+
+  /**
+   * Selective polling: check drainer capacity for each assigned TP before poll().
+   * Pause TPs whose drainer is near-full, resume TPs whose drainer has recovered.
+   * This prevents blocking batches from ever entering memory (Samza-style).
+   */
+  private void applyDrainerBackpressure() {
+    if (!backpressureInlineCheckEnabled || storeBufferService == null || pauseFunction == null) {
+      return;
+    }
+
+    for (PubSubTopicPartition tp: dataReceiverMap.keySet()) {
+      int drainerIdx = storeBufferService.getDrainerIndexForTopicPartition(tp);
+      double remainingFraction = storeBufferService.getRemainingCapacityFraction(drainerIdx);
+
+      if (remainingFraction < (1.0 - backpressurePauseThreshold) && !backpressurePausedPartitions.contains(tp)) {
+        // Drainer is above pause threshold (e.g., >90% full) — pause this TP
+        pauseFunction.accept(tp);
+        backpressurePausedPartitions.add(tp);
+        LOGGER.info(
+            "Paused {} due to drainer backpressure (drainer={}, remaining={} %)",
+            tp,
+            drainerIdx,
+            String.format("%.1f", remainingFraction * 100));
+      } else if (remainingFraction > (1.0 - backpressureResumeThreshold) && backpressurePausedPartitions.contains(tp)) {
+        // Drainer has recovered below resume threshold (e.g., <70% full) — resume this TP
+        resumeFunction.accept(tp);
+        backpressurePausedPartitions.remove(tp);
+        LOGGER.info(
+            "Resumed {} after drainer pressure relieved (drainer={}, remaining={} %)",
+            tp,
+            drainerIdx,
+            String.format("%.1f", remainingFraction * 100));
+      }
+    }
+  }
+
+  /**
+   * Returns the set of topic partitions currently paused due to drainer backpressure.
+   * Used by InactiveTopicPartitionChecker as a safety net, and for excluding paused TPs
+   * from stale poll tracking.
+   */
+  Set<PubSubTopicPartition> getBackpressurePausedPartitions() {
+    return Collections.unmodifiableSet(backpressurePausedPartitions);
   }
 
   void stop() {

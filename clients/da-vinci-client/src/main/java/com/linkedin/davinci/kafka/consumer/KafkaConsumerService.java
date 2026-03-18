@@ -120,7 +120,8 @@ public abstract class KafkaConsumerService extends AbstractKafkaConsumerService 
       final boolean isUnregisterMetricForDeletedStoreEnabled,
       final VeniceServerConfig serverConfig,
       final PubSubContext pubSubContext,
-      final ExecutorService crossTpProcessingPool) {
+      final ExecutorService crossTpProcessingPool,
+      final AbstractStoreBufferService storeBufferService) {
     this.kafkaUrl = consumerProperties.getProperty(KAFKA_BOOTSTRAP_SERVERS);
     this.kafkaUrlForLogger = Utils.getSanitizedStringForLogger(kafkaUrl);
     this.LOGGER = LogManager.getLogger(
@@ -187,27 +188,62 @@ public abstract class KafkaConsumerService extends AbstractKafkaConsumerService 
           pubSubConsumer::batchUnsubscribe,
           time);
 
-      ConsumptionTask consumptionTask = new ConsumptionTask(
-          consumerNamePrefix,
-          i,
-          readCycleDelayMs,
-          pollFunction,
-          bandwidthThrottlerFunction,
-          recordsThrottlerFunction,
-          this.aggStats,
-          cleaner,
-          consumerPollTracker,
-          crossTpProcessingPool);
+      boolean backpressureEnabled =
+          serverConfig.isDrainerBackpressureEnabled() && serverConfig.isDrainerBackpressureInlineCheckEnabled();
+      ConsumptionTask consumptionTask;
+      if (backpressureEnabled && storeBufferService != null) {
+        consumptionTask = new ConsumptionTask(
+            consumerNamePrefix,
+            i,
+            readCycleDelayMs,
+            pollFunction,
+            bandwidthThrottlerFunction,
+            recordsThrottlerFunction,
+            this.aggStats,
+            cleaner,
+            consumerPollTracker,
+            crossTpProcessingPool,
+            pubSubConsumer::pause,
+            pubSubConsumer::resume,
+            storeBufferService,
+            serverConfig.getDrainerBackpressurePauseThreshold(),
+            serverConfig.getDrainerBackpressureResumeThreshold(),
+            true);
+      } else {
+        consumptionTask = new ConsumptionTask(
+            consumerNamePrefix,
+            i,
+            readCycleDelayMs,
+            pollFunction,
+            bandwidthThrottlerFunction,
+            recordsThrottlerFunction,
+            this.aggStats,
+            cleaner,
+            consumerPollTracker,
+            crossTpProcessingPool);
+      }
       consumerToConsumptionTask.putByIndex(pubSubConsumer, consumptionTask, i);
       consumerToLocks.put(pubSubConsumer, new ReentrantLock());
     }
 
     if (shouldEnableInactiveTopicPartitionChecker(serverConfig, poolType)) {
-      this.inactiveTopicPartitionChecker = new InactiveTopicPartitionChecker(
-          getConsumerToConsumptionTask(),
-          serverConfig.getInactiveTopicPartitionCheckerInternalInSeconds(),
-          serverConfig.getInactiveTopicPartitionCheckerThresholdInSeconds());
-      LOGGER.info("Created InactiveTopicPartitionChecker for consumer pool type: {}", poolType);
+      if (serverConfig.isDrainerBackpressureEnabled() && storeBufferService != null) {
+        this.inactiveTopicPartitionChecker = new InactiveTopicPartitionChecker(
+            getConsumerToConsumptionTask(),
+            serverConfig.getInactiveTopicPartitionCheckerInternalInSeconds(),
+            serverConfig.getInactiveTopicPartitionCheckerThresholdInSeconds(),
+            storeBufferService,
+            serverConfig.getDrainerBackpressureResumeThreshold());
+        LOGGER.info(
+            "Created InactiveTopicPartitionChecker with drainer backpressure safety net for consumer pool type: {}",
+            poolType);
+      } else {
+        this.inactiveTopicPartitionChecker = new InactiveTopicPartitionChecker(
+            getConsumerToConsumptionTask(),
+            serverConfig.getInactiveTopicPartitionCheckerInternalInSeconds(),
+            serverConfig.getInactiveTopicPartitionCheckerThresholdInSeconds());
+        LOGGER.info("Created InactiveTopicPartitionChecker for consumer pool type: {}", poolType);
+      }
     } else {
       this.inactiveTopicPartitionChecker = null;
     }
@@ -537,7 +573,8 @@ public abstract class KafkaConsumerService extends AbstractKafkaConsumerService 
         boolean unregisterMetricForDeletedStoreEnabled,
         VeniceServerConfig serverConfig,
         PubSubContext pubSubContext,
-        ExecutorService crossTpProcessingPool);
+        ExecutorService crossTpProcessingPool,
+        AbstractStoreBufferService storeBufferService);
   }
 
   /**

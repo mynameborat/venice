@@ -112,6 +112,10 @@ import static com.linkedin.venice.ConfigKeys.SERVER_DISK_FULL_THRESHOLD;
 import static com.linkedin.venice.ConfigKeys.SERVER_DISK_HEALTH_CHECK_INTERVAL_IN_SECONDS;
 import static com.linkedin.venice.ConfigKeys.SERVER_DISK_HEALTH_CHECK_SERVICE_ENABLED;
 import static com.linkedin.venice.ConfigKeys.SERVER_DISK_HEALTH_CHECK_TIMEOUT_IN_SECONDS;
+import static com.linkedin.venice.ConfigKeys.SERVER_DRAINER_BACKPRESSURE_ENABLED;
+import static com.linkedin.venice.ConfigKeys.SERVER_DRAINER_BACKPRESSURE_INLINE_CHECK_ENABLED;
+import static com.linkedin.venice.ConfigKeys.SERVER_DRAINER_BACKPRESSURE_PAUSE_THRESHOLD;
+import static com.linkedin.venice.ConfigKeys.SERVER_DRAINER_BACKPRESSURE_RESUME_THRESHOLD;
 import static com.linkedin.venice.ConfigKeys.SERVER_ENABLE_LIVE_CONFIG_BASED_KAFKA_THROTTLING;
 import static com.linkedin.venice.ConfigKeys.SERVER_ENABLE_PARALLEL_BATCH_GET;
 import static com.linkedin.venice.ConfigKeys.SERVER_FORKED_PROCESS_JVM_ARGUMENT_LIST;
@@ -698,6 +702,11 @@ public class VeniceServerConfig extends VeniceClusterConfig {
   private final int inactiveTopicPartitionCheckerInternalInSeconds;
   private final int inactiveTopicPartitionCheckerThresholdInSeconds;
 
+  private final boolean drainerBackpressureEnabled;
+  private final double drainerBackpressurePauseThreshold;
+  private final double drainerBackpressureResumeThreshold;
+  private final boolean drainerBackpressureInlineCheckEnabled;
+
   private final boolean lagBasedReplicaAutoResubscribeEnabled;
   private final int lagBasedReplicaAutoResubscribeIntervalInSeconds;
   private final int lagBasedReplicaAutoResubscribeThresholdInSeconds;
@@ -1190,6 +1199,13 @@ public class VeniceServerConfig extends VeniceClusterConfig {
         serverProperties.getInt(SERVER_INACTIVE_TOPIC_PARTITION_CHECKER_INTERNAL_IN_SECONDS, 100);
     this.inactiveTopicPartitionCheckerThresholdInSeconds =
         serverProperties.getInt(SERVER_INACTIVE_TOPIC_PARTITION_CHECKER_THRESHOLD_IN_SECONDS, 5);
+    this.drainerBackpressureEnabled = serverProperties.getBoolean(SERVER_DRAINER_BACKPRESSURE_ENABLED, false);
+    this.drainerBackpressurePauseThreshold =
+        serverProperties.getDouble(SERVER_DRAINER_BACKPRESSURE_PAUSE_THRESHOLD, 0.90);
+    this.drainerBackpressureResumeThreshold =
+        serverProperties.getDouble(SERVER_DRAINER_BACKPRESSURE_RESUME_THRESHOLD, 0.70);
+    this.drainerBackpressureInlineCheckEnabled =
+        serverProperties.getBoolean(SERVER_DRAINER_BACKPRESSURE_INLINE_CHECK_ENABLED, true);
     this.lagBasedReplicaAutoResubscribeEnabled =
         serverProperties.getBoolean(SERVER_LAG_BASED_REPLICA_AUTO_RESUBSCRIBE_ENABLED, false);
     this.lagBasedReplicaAutoResubscribeIntervalInSeconds =
@@ -2150,6 +2166,22 @@ public class VeniceServerConfig extends VeniceClusterConfig {
 
   public boolean isInactiveTopicPartitionCheckerEnabled() {
     return inactiveTopicPartitionCheckerEnabled;
+  }
+
+  public boolean isDrainerBackpressureEnabled() {
+    return drainerBackpressureEnabled;
+  }
+
+  public double getDrainerBackpressurePauseThreshold() {
+    return drainerBackpressurePauseThreshold;
+  }
+
+  public double getDrainerBackpressureResumeThreshold() {
+    return drainerBackpressureResumeThreshold;
+  }
+
+  public boolean isDrainerBackpressureInlineCheckEnabled() {
+    return drainerBackpressureInlineCheckEnabled;
   }
 
   public boolean isLagBasedReplicaAutoResubscribeEnabled() {

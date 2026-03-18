@@ -158,6 +158,21 @@ public class StoreBufferService extends AbstractStoreBufferService {
     return blockingQueueArr.get(drainerIndex);
   }
 
+  @Override
+  public int getDrainerIndexForTopicPartition(PubSubTopicPartition topicPartition) {
+    DefaultPubSubMessage fakeRecord = new FakePubSubMessage(topicPartition);
+    return getDrainerIndexForConsumerRecord(fakeRecord, topicPartition.getPartitionNumber());
+  }
+
+  @Override
+  public double getRemainingCapacityFraction(int drainerIndex) {
+    if (bufferCapacityPerDrainer <= 0) {
+      return 1.0;
+    }
+    long remaining = blockingQueueArr.get(drainerIndex).remainingMemoryCapacityInByte();
+    return (double) remaining / bufferCapacityPerDrainer;
+  }
+
   protected int getDrainerIndexForConsumerRecord(DefaultPubSubMessage consumerRecord, int partition) {
     /**
      * This will guarantee that 'topicHash' will be a positive integer, whose maximum value is

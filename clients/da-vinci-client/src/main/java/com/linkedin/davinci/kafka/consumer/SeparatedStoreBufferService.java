@@ -67,6 +67,28 @@ public class SeparatedStoreBufferService extends AbstractStoreBufferService {
   }
 
   @Override
+  public int getDrainerIndexForTopicPartition(PubSubTopicPartition topicPartition) {
+    // Return the drainer index from the unsorted delegate as a representative.
+    // For capacity checks, getRemainingCapacityFraction takes the min across both delegates.
+    return unsortedStoreBufferServiceDelegate.getDrainerIndexForTopicPartition(topicPartition);
+  }
+
+  @Override
+  public double getRemainingCapacityFraction(int drainerIndex) {
+    // Take the minimum remaining capacity fraction across both delegates (max pressure).
+    // If the drainer index exceeds one delegate's range, only use the other.
+    double sortedFraction = 1.0;
+    double unsortedFraction = 1.0;
+    if (drainerIndex < sortedPoolSize) {
+      sortedFraction = sortedStoreBufferServiceDelegate.getRemainingCapacityFraction(drainerIndex);
+    }
+    if (drainerIndex < unsortedPoolSize) {
+      unsortedFraction = unsortedStoreBufferServiceDelegate.getRemainingCapacityFraction(drainerIndex);
+    }
+    return Math.min(sortedFraction, unsortedFraction);
+  }
+
+  @Override
   public void putConsumerRecord(
       DefaultPubSubMessage consumerRecord,
       StoreIngestionTask ingestionTask,

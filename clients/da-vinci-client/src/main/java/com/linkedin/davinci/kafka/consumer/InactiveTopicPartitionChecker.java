@@ -54,6 +54,12 @@ public class InactiveTopicPartitionChecker extends AbstractVeniceService {
   /** Executor service for scheduling periodic inactive topic partition checks */
   private final ScheduledExecutorService executorService;
 
+  /** Store buffer service for drainer capacity checks (may be null if backpressure is disabled) */
+  private final AbstractStoreBufferService storeBufferService;
+
+  /** Threshold at which to resume a backpressure-paused TP (remaining capacity fraction) */
+  private final double drainerBackpressureResumeThreshold;
+
   /**
    * Creates a new InactiveTopicPartitionChecker.
    *
@@ -66,10 +72,26 @@ public class InactiveTopicPartitionChecker extends AbstractVeniceService {
       IndexedMap<SharedKafkaConsumer, ConsumptionTask> consumerToConsumptionTask,
       long inactiveTopicPartitionCheckIntervalInSeconds,
       long inactiveTopicPartitionThresholdInSeconds) {
+    this(
+        consumerToConsumptionTask,
+        inactiveTopicPartitionCheckIntervalInSeconds,
+        inactiveTopicPartitionThresholdInSeconds,
+        null,
+        0);
+  }
+
+  public InactiveTopicPartitionChecker(
+      IndexedMap<SharedKafkaConsumer, ConsumptionTask> consumerToConsumptionTask,
+      long inactiveTopicPartitionCheckIntervalInSeconds,
+      long inactiveTopicPartitionThresholdInSeconds,
+      AbstractStoreBufferService storeBufferService,
+      double drainerBackpressureResumeThreshold) {
     this.consumerToConsumptionTask = consumerToConsumptionTask;
     this.inactiveTopicPartitionCheckIntervalInMs =
         TimeUnit.SECONDS.toMillis(inactiveTopicPartitionCheckIntervalInSeconds);
     this.inactiveTopicPartitionThresholdInMs = TimeUnit.SECONDS.toMillis(inactiveTopicPartitionThresholdInSeconds);
+    this.storeBufferService = storeBufferService;
+    this.drainerBackpressureResumeThreshold = drainerBackpressureResumeThreshold;
     this.executorService =
         Executors.newSingleThreadScheduledExecutor(new DaemonThreadFactory("InactiveTopicPartitionChecker"));
   }
@@ -158,9 +180,14 @@ public class InactiveTopicPartitionChecker extends AbstractVeniceService {
             getConsumerToPausedTopicPartitionsMap().computeIfAbsent(consumer, x -> new HashSet<>());
         Set<PubSubTopicPartition> assignedTopicPartitions = consumer.getAssignment();
         Set<PubSubTopicPartition> currentlyInactiveTopicPartitions = new HashSet<>();
+        Set<PubSubTopicPartition> backpressurePaused = task.getBackpressurePausedPartitions();
         // Step 1: Check all assigned topic-partitions for inactivity and collect currently inactive ones
         for (PubSubTopicPartition topicPartition: assignedTopicPartitions) {
           if (previouslyPausedTopicPartitions.contains(topicPartition)) {
+            continue;
+          }
+          // Skip TPs paused for backpressure — they are managed by the inline check
+          if (backpressurePaused.contains(topicPartition)) {
             continue;
           }
           long lastSuccessfulPollTimestamp = task.getPartitionStats(topicPartition).getLastSuccessfulPollTimestamp();
@@ -207,10 +234,53 @@ public class InactiveTopicPartitionChecker extends AbstractVeniceService {
               task.getTaskIdStr());
         }
       }
+      // Drainer backpressure safety net: resume TPs that the inline check may have missed
+      sweepDrainerBackpressure();
+
       LOGGER.info("Completed checking inactive topic partitions.");
     } catch (Exception e) {
       // Log the exception to avoid breaking the scheduled execution
       LOGGER.warn("Error during inactive topic partition check: {}", e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Safety net for drainer backpressure: sweep all ConsumptionTasks and resume any TPs that
+   * are still paused for backpressure but whose drainer has recovered below the resume threshold.
+   * This handles edge cases where the inline pre-poll check in ConsumptionTask couldn't resume
+   * (e.g., the task thread was delayed or the TP was removed from the data receiver map).
+   */
+  void sweepDrainerBackpressure() {
+    if (storeBufferService == null) {
+      return;
+    }
+
+    for (Map.Entry<SharedKafkaConsumer, ConsumptionTask> entry: getConsumerToConsumptionTask().entrySet()) {
+      SharedKafkaConsumer consumer = entry.getKey();
+      ConsumptionTask task = entry.getValue();
+      Set<PubSubTopicPartition> backpressurePaused = task.getBackpressurePausedPartitions();
+
+      if (backpressurePaused.isEmpty()) {
+        continue;
+      }
+
+      for (PubSubTopicPartition tp: backpressurePaused) {
+        int drainerIdx = storeBufferService.getDrainerIndexForTopicPartition(tp);
+        double remainingFraction = storeBufferService.getRemainingCapacityFraction(drainerIdx);
+
+        if (remainingFraction > (1.0 - drainerBackpressureResumeThreshold)) {
+          consumer.resume(tp);
+          LOGGER.info(
+              "Safety-net resumed {} after drainer pressure relieved (drainer={}, remaining={} %, task={})",
+              tp,
+              drainerIdx,
+              String.format("%.1f", remainingFraction * 100),
+              task.getTaskIdStr());
+          // Note: we don't remove from backpressurePaused here — the ConsumptionTask's
+          // inline check will do that on its next iteration, or the TP will be re-paused
+          // if still under pressure.
+        }
+      }
     }
   }
 

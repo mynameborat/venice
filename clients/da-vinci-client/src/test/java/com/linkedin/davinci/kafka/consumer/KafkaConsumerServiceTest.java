@@ -189,6 +189,7 @@ public class KafkaConsumerServiceTest {
         false,
         mockVeniceServerConfig,
         mockPubSubContext,
+        null,
         null) {
       @Override
       protected SharedKafkaConsumer pickConsumerForPartition(
@@ -259,6 +260,7 @@ public class KafkaConsumerServiceTest {
         false,
         mockVeniceServerConfig,
         mockPubSubContext,
+        null,
         null);
     consumerService.start();
 
@@ -440,6 +442,7 @@ public class KafkaConsumerServiceTest {
         false,
         mockVeniceServerConfig,
         mockPubSubContext,
+        null,
         null) {
       @Override
       protected SharedKafkaConsumer pickConsumerForPartition(

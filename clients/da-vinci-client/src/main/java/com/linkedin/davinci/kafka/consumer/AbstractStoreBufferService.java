@@ -34,6 +34,17 @@ public abstract class AbstractStoreBufferService extends AbstractVeniceService {
 
   public abstract long getMinMemoryUsagePerDrainer();
 
+  /**
+   * Returns the drainer index that would be used for the given topic partition.
+   * This allows callers to check drainer capacity before records are queued.
+   */
+  public abstract int getDrainerIndexForTopicPartition(PubSubTopicPartition topicPartition);
+
+  /**
+   * Returns the fraction of remaining capacity for the given drainer index (0.0 = full, 1.0 = empty).
+   */
+  public abstract double getRemainingCapacityFraction(int drainerIndex);
+
   public abstract CompletableFuture<Void> execSyncOffsetCommandAsync(
       PubSubTopicPartition topicPartition,
       StoreIngestionTask ingestionTask) throws InterruptedException;
