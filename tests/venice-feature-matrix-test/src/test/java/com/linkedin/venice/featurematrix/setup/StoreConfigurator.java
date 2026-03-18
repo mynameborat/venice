@@ -7,7 +7,6 @@ import com.linkedin.venice.controllerapi.UpdateStoreQueryParams;
 import com.linkedin.venice.featurematrix.model.FeatureDimensions.Compression;
 import com.linkedin.venice.featurematrix.model.FeatureDimensions.Topology;
 import com.linkedin.venice.featurematrix.model.TestCaseConfig;
-import com.linkedin.venice.utils.Utils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -31,15 +30,15 @@ public class StoreConfigurator {
    * @param config the test case configuration
    * @param keySchemaStr Avro key schema
    * @param valueSchemaStr Avro value schema
-   * @return the store name
+   * @param storeName the store name to use
    */
-  public static String createAndConfigureStore(
+  public static void createAndConfigureStore(
       ControllerClient controllerClient,
       String clusterName,
       TestCaseConfig config,
       String keySchemaStr,
-      String valueSchemaStr) {
-    String storeName = Utils.getUniqueString("feature-matrix-store");
+      String valueSchemaStr,
+      String storeName) {
     LOGGER.info("Creating store {} for test case {}", storeName, config.getTestCaseId());
 
     // Create the store
@@ -54,7 +53,6 @@ public class StoreConfigurator {
     controllerClient.updateStore(storeName, params);
 
     LOGGER.info("Store {} configured successfully for test case {}", storeName, config.getTestCaseId());
-    return storeName;
   }
 
   /**

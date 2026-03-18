@@ -76,6 +76,10 @@ public class FeatureMatrixClusterSetup {
     return cluster;
   }
 
+  public VeniceTwoLayerMultiRegionMultiClusterWrapper getMultiRegionCluster() {
+    return cluster;
+  }
+
   /**
    * Returns the parent controller URL.
    */
@@ -88,6 +92,13 @@ public class FeatureMatrixClusterSetup {
    */
   public String getClusterName() {
     return cluster.getClusterNames()[0];
+  }
+
+  /**
+   * Returns a random router URL from the first child cluster.
+   */
+  public String getRandomRouterURL() {
+    return cluster.getChildRegions().get(0).getClusters().get(getClusterName()).getRandomRouterURL();
   }
 
   /**

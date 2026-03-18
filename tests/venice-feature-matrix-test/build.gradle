@@ -19,6 +19,7 @@ dependencies {
   testImplementation libraries.log4j2core
   testImplementation libraries.avro
   testImplementation libraries.kafkaClients
+  testImplementation libraries.samzaApi
 }
 
 ext {
@@ -56,11 +57,13 @@ task featureMatrixTest(type: Test) {
 
   useTestNG() {
     listeners << 'com.linkedin.venice.featurematrix.reporting.FeatureMatrixReportListener'
+    // Run Factory instances in parallel (each instance = one cluster config group)
+    parallel = 'instances'
+    threadCount = 4
   }
 
-  // Each cluster config group gets its own forked JVM
-  forkEvery = 1
-  maxHeapSize = '4g'
+  // Single JVM — Factory pattern handles cluster isolation, no need for forkEvery
+  maxHeapSize = '6g'
 
   systemProperty 'feature.matrix.report.dir', "${buildDir}/reports"
 

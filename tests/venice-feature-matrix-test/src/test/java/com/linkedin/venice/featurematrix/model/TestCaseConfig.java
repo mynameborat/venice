@@ -114,13 +114,20 @@ public class TestCaseConfig {
     this.systemStoreAutoMat = isOn(DimensionId.C8_SYSTEM_STORE_AUTO_MAT);
     this.supersetSchemaGen = isOn(DimensionId.C9_SUPERSET_SCHEMA_GEN);
 
-    // Parse router
-    this.readThrottling = isOn(DimensionId.RT1_READ_THROTTLING);
+    // Parse router (RT dimensions may be absent from PICT output — use production defaults)
+    this.readThrottling =
+        dimensions.containsKey(DimensionId.RT1_READ_THROTTLING) ? isOn(DimensionId.RT1_READ_THROTTLING) : true;
     this.earlyThrottle = isOn(DimensionId.RT2_EARLY_THROTTLE);
-    this.smartLongTailRetry = isOn(DimensionId.RT3_SMART_LONG_TAIL_RETRY);
-    this.routingStrategy = parseRoutingStrategy(get(DimensionId.RT4_ROUTING_STRATEGY));
+    this.smartLongTailRetry = dimensions.containsKey(DimensionId.RT3_SMART_LONG_TAIL_RETRY)
+        ? isOn(DimensionId.RT3_SMART_LONG_TAIL_RETRY)
+        : true;
+    this.routingStrategy = dimensions.containsKey(DimensionId.RT4_ROUTING_STRATEGY)
+        ? parseRoutingStrategy(get(DimensionId.RT4_ROUTING_STRATEGY))
+        : RoutingStrategy.LEAST_LOADED;
     this.latencyBasedRouting = isOn(DimensionId.RT5_LATENCY_BASED_ROUTING);
-    this.clientDecompression = isOn(DimensionId.RT6_CLIENT_DECOMPRESSION);
+    this.clientDecompression = dimensions.containsKey(DimensionId.RT6_CLIENT_DECOMPRESSION)
+        ? isOn(DimensionId.RT6_CLIENT_DECOMPRESSION)
+        : true;
     this.http2Inbound = isOn(DimensionId.RT7_HTTP2_INBOUND);
     this.connectionWarming = isOn(DimensionId.RT8_CONNECTION_WARMING);
   }

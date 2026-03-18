@@ -1,116 +1,74 @@
 package com.linkedin.venice.featurematrix.write;
 
-import com.linkedin.venice.featurematrix.model.FeatureDimensions.PushEngine;
+import static com.linkedin.venice.utils.IntegrationTestPushUtils.defaultVPJProps;
+
 import com.linkedin.venice.featurematrix.model.TestCaseConfig;
+import com.linkedin.venice.integration.utils.VeniceTwoLayerMultiRegionMultiClusterWrapper;
+import com.linkedin.venice.spark.datawriter.jobs.DataWriterSparkJob;
+import com.linkedin.venice.utils.IntegrationTestPushUtils;
+import com.linkedin.venice.vpj.VenicePushJobConstants;
 import java.io.File;
-import java.util.Map;
 import java.util.Properties;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 
 /**
- * Executes batch push (VPJ) operations for test cases.
- * Supports both MapReduce and Spark push engines (W11),
- * ZSTD dictionary compression (W8), deferred version swap (W9),
- * target region push (W10), and TTL repush (W12).
+ * Executes batch push (VPJ) and incremental push operations using Venice's integration test utilities.
  */
 public class BatchPushExecutor {
   private static final Logger LOGGER = LogManager.getLogger(BatchPushExecutor.class);
 
   /**
-   * Executes a batch push with the given data.
-   *
-   * @param storeName the Venice store name
-   * @param config test case configuration with W-dimension values
-   * @param controllerUrl the controller URL
-   * @param inputData map of key-value pairs to push
-   * @param keySchemaStr Avro key schema
-   * @param valueSchemaStr Avro value schema
-   * @param inputDir directory for writing Avro input files
+   * Executes a batch push using the Spark DataWriter engine.
    */
   public static void executeBatchPush(
       String storeName,
       TestCaseConfig config,
-      String controllerUrl,
-      Map<String, String> inputData,
-      String keySchemaStr,
-      String valueSchemaStr,
+      VeniceTwoLayerMultiRegionMultiClusterWrapper multiRegionCluster,
       File inputDir) {
     LOGGER.info(
-        "Executing batch push for store={}, engine={}, compression={}, deferredSwap={}, targetRegion={}, ttlRepush={}",
+        "Executing batch push for store={}, compression={}, deferredSwap={}, targetRegion={}",
         storeName,
-        config.getPushEngine(),
         config.getCompression(),
         config.isDeferredSwap(),
-        config.isTargetRegionPush(),
-        config.isTtlRepush());
+        config.isTargetRegionPush());
 
-    Properties pushJobProps = buildPushJobProperties(storeName, config, controllerUrl, inputDir.getAbsolutePath());
+    String inputDirPath = "file://" + inputDir.getAbsolutePath();
+    Properties vpjProps = defaultVPJProps(multiRegionCluster, inputDirPath, storeName);
+    vpjProps
+        .setProperty(VenicePushJobConstants.DATA_WRITER_COMPUTE_JOB_CLASS, DataWriterSparkJob.class.getCanonicalName());
+    vpjProps.setProperty(VenicePushJobConstants.SPARK_NATIVE_INPUT_FORMAT_ENABLED, "true");
 
-    // Write input data to Avro file
-    File inputFile = writeAvroInputFile(inputData, keySchemaStr, valueSchemaStr, inputDir);
-
-    // Execute push based on engine type
-    if (config.getPushEngine() == PushEngine.SPARK) {
-      executeSpark(pushJobProps);
-    } else {
-      executeMapReduce(pushJobProps);
-    }
-  }
-
-  private static Properties buildPushJobProperties(
-      String storeName,
-      TestCaseConfig config,
-      String controllerUrl,
-      String inputDirPath) {
-    Properties props = new Properties();
-    props.setProperty("venice.store.name", storeName);
-    props.setProperty("venice.controller.url", controllerUrl);
-    props.setProperty("input.path", inputDirPath);
-    props.setProperty("key.field", "key");
-    props.setProperty("value.field", "value");
-
-    // W9: Deferred version swap
     if (config.isDeferredSwap()) {
-      props.setProperty("venice.store.deferred.version.swap", "true");
+      vpjProps.setProperty(VenicePushJobConstants.DEFER_VERSION_SWAP, "true");
     }
 
-    // W10: Target region push
     if (config.isTargetRegionPush()) {
-      props.setProperty("venice.push.target.region", "dc-0");
+      vpjProps.setProperty(VenicePushJobConstants.TARGETED_REGION_PUSH_ENABLED, "true");
     }
 
-    // W12: TTL Repush
-    if (config.isTtlRepush()) {
-      props.setProperty("venice.push.repush.ttl.enabled", "true");
-      props.setProperty("venice.push.repush.ttl.seconds", "3600");
-    }
-
-    return props;
+    IntegrationTestPushUtils.runVPJ(vpjProps);
+    LOGGER.info("Batch push completed for store {}", storeName);
   }
 
-  private static File writeAvroInputFile(
-      Map<String, String> inputData,
-      String keySchemaStr,
-      String valueSchemaStr,
+  /**
+   * Executes an incremental push using VPJ with the incremental push flag.
+   */
+  public static void executeIncrementalPush(
+      String storeName,
+      VeniceTwoLayerMultiRegionMultiClusterWrapper multiRegionCluster,
       File inputDir) {
-    // IntegrationTestPushUtils provides utilities for writing Avro files.
-    // In the actual test, we use TestWriteUtils.writeSimpleAvroFileWithStringToStringSchema
-    // or similar utilities from venice-test-common.
-    File inputFile = new File(inputDir, "input.avro");
-    LOGGER.info("Writing {} records to {}", inputData.size(), inputFile.getAbsolutePath());
-    // Actual file writing delegated to test utilities at runtime
-    return inputFile;
-  }
+    LOGGER.info("Executing incremental push for store={}", storeName);
 
-  private static void executeMapReduce(Properties props) {
-    LOGGER.info("Executing MapReduce push job");
-    // Delegates to VenicePushJob via IntegrationTestPushUtils
-  }
+    String inputDirPath = "file://" + inputDir.getAbsolutePath();
+    Properties vpjProps = defaultVPJProps(multiRegionCluster, inputDirPath, storeName);
+    vpjProps
+        .setProperty(VenicePushJobConstants.DATA_WRITER_COMPUTE_JOB_CLASS, DataWriterSparkJob.class.getCanonicalName());
+    vpjProps.setProperty(VenicePushJobConstants.SPARK_NATIVE_INPUT_FORMAT_ENABLED, "true");
+    vpjProps.setProperty(VenicePushJobConstants.INCREMENTAL_PUSH, "true");
 
-  private static void executeSpark(Properties props) {
-    LOGGER.info("Executing Spark push job");
-    // Delegates to VenicePushJob with Spark engine configuration
+    IntegrationTestPushUtils.runVPJ(vpjProps);
+    LOGGER.info("Incremental push completed for store {}", storeName);
   }
 }

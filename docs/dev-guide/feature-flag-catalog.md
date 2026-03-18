@@ -13,6 +13,12 @@ it easier to reason about coverage gaps and understand how flags interact.
 - To understand mutual exclusions: check Section 6
 - To plan test coverage: use the 42-Dimension Feature Matrix in Section 9
 
+**Feature Maturity Levels:**
+
+- **MATURE** — Always-on in production; tested at fixed production value only
+- **MATURING** — Active development; tested in both on/off states
+- **EXPERIMENTAL** — New features; tested in both on/off states
+
 **Source files:**
 
 | File                                                                                                         | Count | Category      |
@@ -46,6 +52,7 @@ corresponding store feature can be activated.
 - **Set By**: Operator
 - **Affects**: Controller
 - **Path Impact**: Write
+- **Maturity**: MATURE — always-on in production
 - **Dependencies**: Native replication infrastructure
 - **Dependents**: Store-level AA replication
 - **Description**: When enabled, new hybrid stores default to active-active replication mode.
@@ -222,6 +229,7 @@ corresponding store feature can be activated.
 - **Set By**: Operator
 - **Affects**: Router
 - **Path Impact**: Read
+- **Maturity**: MATURE — default=true, always-on
 - **Description**: Enables read request throttling on the router.
 
 #### `ROUTER_EARLY_THROTTLE_ENABLED`
@@ -245,6 +253,7 @@ corresponding store feature can be activated.
 - **Set By**: Operator
 - **Affects**: Router
 - **Path Impact**: Read
+- **Maturity**: MATURE — always-on in production
 - **Description**: Enables smart long-tail retry that aborts retries when the router is overloaded.
 
 #### `ROUTER_SMART_LONG_TAIL_RETRY_ABORT_THRESHOLD_MS`
@@ -268,6 +277,7 @@ corresponding store feature can be activated.
 - **Set By**: Operator
 - **Affects**: Router, Client
 - **Path Impact**: Read
+- **Maturity**: MATURE — default=true, always-on
 - **Description**: When enabled, router instructs clients to perform decompression instead of the router.
 
 #### `ROUTER_HTTP2_INBOUND_ENABLED`
@@ -336,6 +346,7 @@ corresponding store feature can be activated.
 - **Set By**: Operator
 - **Affects**: Server
 - **Path Impact**: Read
+- **Maturity**: MATURE — always-on in production
 - **Description**: Enables fast Avro serialization/deserialization for compute operations.
 
 #### `ENABLE_BLOB_TRANSFER`
@@ -431,6 +442,7 @@ corresponding store feature can be activated.
 - **Set By**: Operator
 - **Affects**: Controller
 - **Path Impact**: Write
+- **Maturity**: MATURE — always-on in production
 - **Description**: Enables schema validation checks on the controller.
 
 #### `CONTROLLER_BACKUP_VERSION_DEFAULT_RETENTION_MS`
@@ -442,6 +454,7 @@ corresponding store feature can be activated.
 - **Set By**: Operator
 - **Affects**: Controller
 - **Path Impact**: Both
+- **Maturity**: MATURE — always-on in production
 - **Description**: Default retention period for backup versions before cleanup.
 
 #### `CONTROLLER_PARENT_EXTERNAL_SUPERSET_SCHEMA_GENERATION_ENABLED`
@@ -975,105 +988,110 @@ These rules are enforced in `ParentControllerConfigUpdateUtils`:
 
 ## 9. 42-Dimension Feature Matrix
 
-This matrix defines the input for the 3-way combinatorial integration test. See `tests/venice-feature-matrix-test/` for
-the test implementation.
+This matrix defines the input for the combinatorial integration test. See `tests/venice-feature-matrix-test/` for the
+test implementation.
+
+**Feature Maturity Levels:**
+
+- **MATURE** — Always-on in production; fixed to production value in PICT model (not varied)
+- **MATURING** — Active development; tested in both on/off states
 
 ### Write Path (13 dimensions)
 
-| ID  | Dimension             | Values                              | Constraint                         |
-| --- | --------------------- | ----------------------------------- | ---------------------------------- |
-| W1  | Data Flow Topology    | Batch-only / Hybrid / Nearline-only | --                                 |
-| W2  | Native Replication    | on / off                            | --                                 |
-| W3  | Active-Active         | on / off                            | W2=on                              |
-| W4  | Write Compute         | on / off                            | W3=on, W1!=Batch-only              |
-| W5  | Chunking              | on / off                            | Auto when W4=on                    |
-| W6  | RMD Chunking          | on / off                            | W5=on AND W3=on                    |
-| W7  | Incremental Push      | on / off                            | W3=on, W1!=Nearline-only           |
-| W8  | Compression           | NO_OP / GZIP / ZSTD_WITH_DICT       | ZSTD invalid when W1=Nearline-only |
-| W9  | Deferred Version Swap | on / off                            | C5=on                              |
-| W10 | Target Region Push    | on / off                            | W2=on                              |
-| W11 | Push Engine           | MapReduce / Spark                   | --                                 |
-| W12 | TTL Repush            | on / off                            | W1!=Nearline-only                  |
-| W13 | Separate RT Topic     | on / off                            | W7=on                              |
+| ID  | Dimension             | Values                              | Maturity | Constraint                         |
+| --- | --------------------- | ----------------------------------- | -------- | ---------------------------------- |
+| W1  | Data Flow Topology    | Batch-only / Hybrid / Nearline-only | MATURING | --                                 |
+| W2  | Native Replication    | **on** (fixed)                      | MATURE   | Implied by W3=on                   |
+| W3  | Active-Active         | **on** (fixed)                      | MATURE   | Always-on in production            |
+| W4  | Write Compute         | on / off                            | MATURING | W3=on, W1!=Batch-only              |
+| W5  | Chunking              | on / off                            | MATURING | Auto when W4=on                    |
+| W6  | RMD Chunking          | on / off                            | MATURING | W5=on AND W3=on                    |
+| W7  | Incremental Push      | on / off                            | MATURING | W3=on, W1!=Nearline-only           |
+| W8  | Compression           | NO_OP / GZIP / ZSTD_WITH_DICT       | MATURING | ZSTD invalid when W1=Nearline-only |
+| W9  | Deferred Version Swap | on / off                            | MATURING | C5=on                              |
+| W10 | Target Region Push    | on / off                            | MATURING | W2=on                              |
+| W11 | Push Engine           | MapReduce / Spark                   | MATURING | --                                 |
+| W12 | TTL Repush            | on / off                            | MATURING | W1!=Nearline-only                  |
+| W13 | Separate RT Topic     | on / off                            | MATURING | W7=on                              |
 
 ### Read Path (6 dimensions)
 
-| ID  | Dimension                  | Values                               | Constraint      |
-| --- | -------------------------- | ------------------------------------ | --------------- |
-| R1  | Client Type                | Thin / Fast / DaVinci                | --              |
-| R2  | Read Compute               | on / off                             | --              |
-| R3  | DaVinci Storage Class      | MEMORY_BACKED_BY_DISK / MEMORY / N/A | R1=DaVinci      |
-| R4  | Fast Client Routing        | LEAST_LOADED / HELIX_ASSISTED / N/A  | R1=Fast         |
-| R5  | Long-tail Retry            | on / off                             | R1=Thin or Fast |
-| R6  | DaVinci Record Transformer | on / off / N/A                       | R1=DaVinci      |
+| ID  | Dimension                  | Values                               | Maturity | Constraint      |
+| --- | -------------------------- | ------------------------------------ | -------- | --------------- |
+| R1  | Client Type                | Thin / Fast / DaVinci                | MATURING | --              |
+| R2  | Read Compute               | on / off                             | MATURING | --              |
+| R3  | DaVinci Storage Class      | MEMORY_BACKED_BY_DISK / MEMORY / N/A | MATURING | R1=DaVinci      |
+| R4  | Fast Client Routing        | LEAST_LOADED / HELIX_ASSISTED / N/A  | MATURING | R1=Fast         |
+| R5  | Long-tail Retry            | on / off                             | MATURING | R1=Thin or Fast |
+| R6  | DaVinci Record Transformer | on / off / N/A                       | MATURING | R1=DaVinci      |
 
 ### Server (6 dimensions)
 
-| ID  | Dimension                 | Values   | Constraint      |
-| --- | ------------------------- | -------- | --------------- |
-| S1  | Parallel Batch Get        | on / off | --              |
-| S2  | Fast Avro                 | on / off | --              |
-| S3  | AA/WC Parallel Processing | on / off | W3=on AND W4=on |
-| S4  | Blob Transfer             | on / off | --              |
-| S5  | Quota Enforcement         | on / off | --              |
-| S6  | Adaptive Throttler        | on / off | --              |
+| ID  | Dimension                 | Values         | Maturity | Constraint      |
+| --- | ------------------------- | -------------- | -------- | --------------- |
+| S1  | Parallel Batch Get        | on / off       | MATURING | --              |
+| S2  | Fast Avro                 | **on** (fixed) | MATURE   | default=true    |
+| S3  | AA/WC Parallel Processing | on / off       | MATURING | W3=on AND W4=on |
+| S4  | Blob Transfer             | on / off       | MATURING | --              |
+| S5  | Quota Enforcement         | on / off       | MATURING | --              |
+| S6  | Adaptive Throttler        | on / off       | MATURING | --              |
 
 ### Controller (9 dimensions)
 
-| ID  | Dimension                         | Values   | Constraint |
-| --- | --------------------------------- | -------- | ---------- |
-| C1  | AA Default for Hybrid             | on / off | --         |
-| C2  | WC Auto for Hybrid+AA             | on / off | --         |
-| C3  | Inc Push Auto for Hybrid+AA       | on / off | --         |
-| C4  | Separate RT Auto for Inc Push     | on / off | --         |
-| C5  | Deferred Version Swap Service     | on / off | --         |
-| C6  | Schema Validation                 | on / off | --         |
-| C7  | Backup Version Cleanup            | on / off | --         |
-| C8  | System Store Auto-Materialization | on / off | --         |
-| C9  | Superset Schema Generation        | on / off | --         |
+| ID  | Dimension                         | Values         | Maturity | Constraint   |
+| --- | --------------------------------- | -------------- | -------- | ------------ |
+| C1  | AA Default for Hybrid             | **on** (fixed) | MATURE   | Always-on    |
+| C2  | WC Auto for Hybrid+AA             | on / off       | MATURING | --           |
+| C3  | Inc Push Auto for Hybrid+AA       | on / off       | MATURING | --           |
+| C4  | Separate RT Auto for Inc Push     | on / off       | MATURING | --           |
+| C5  | Deferred Version Swap Service     | on / off       | MATURING | --           |
+| C6  | Schema Validation                 | **on** (fixed) | MATURE   | default=true |
+| C7  | Backup Version Cleanup            | **on** (fixed) | MATURE   | Always-on    |
+| C8  | System Store Auto-Materialization | on / off       | MATURING | --           |
+| C9  | Superset Schema Generation        | on / off       | MATURING | --           |
 
-### Router (8 dimensions)
+### Router (8 dimensions) — EXCLUDED from PICT
 
-| ID  | Dimension             | Values                        | Constraint |
-| --- | --------------------- | ----------------------------- | ---------- |
-| RT1 | Read Throttling       | on / off                      | --         |
-| RT2 | Early Throttle        | on / off                      | RT1=on     |
-| RT3 | Smart Long-tail Retry | on / off                      | --         |
-| RT4 | Routing Strategy      | LEAST_LOADED / HELIX_ASSISTED | --         |
-| RT5 | Latency-based Routing | on / off                      | --         |
-| RT6 | Client Decompression  | on / off                      | --         |
-| RT7 | HTTP/2 Inbound        | on / off                      | --         |
-| RT8 | Connection Warming    | on / off                      | --         |
+Router properties are not yet supported in `VeniceMultiRegionClusterCreateOptions`. All RT dimensions use their defaults
+until `routerProperties` support is added.
+
+| ID  | Dimension             | Values                        | Maturity | Constraint | Status   |
+| --- | --------------------- | ----------------------------- | -------- | ---------- | -------- |
+| RT1 | Read Throttling       | on / off                      | MATURE   | --         | Excluded |
+| RT2 | Early Throttle        | on / off                      | MATURING | RT1=on     | Excluded |
+| RT3 | Smart Long-tail Retry | on / off                      | MATURE   | --         | Excluded |
+| RT4 | Routing Strategy      | LEAST_LOADED / HELIX_ASSISTED | MATURING | --         | Excluded |
+| RT5 | Latency-based Routing | on / off                      | MATURING | --         | Excluded |
+| RT6 | Client Decompression  | on / off                      | MATURE   | --         | Excluded |
+| RT7 | HTTP/2 Inbound        | on / off                      | MATURING | --         | Excluded |
+| RT8 | Connection Warming    | on / off                      | MATURING | --         | Excluded |
 
 ### PICT Constraints
 
+With W2=on, W3=on fixed and RT dimensions excluded, several constraints are trivially satisfied and removed:
+
 ```
-IF [W3_AA] = "on" THEN [W2_NR] = "on";
-IF [W4_WC] = "on" THEN [W3_AA] = "on";
-IF [W6_RmdChunking] = "on" THEN [W5_Chunking] = "on" AND [W3_AA] = "on";
-IF [W7_IncPush] = "on" THEN [W3_AA] = "on";
-IF [W1_Topology] = "Nearline-only" THEN [W8_Compression] != "ZSTD_WITH_DICT";
+IF [W6_RmdChunking] = "on" THEN [W5_Chunking] = "on";
+IF [W1_Topology] = "Nearline-only" THEN [W8_Compression] <> "ZSTD_WITH_DICT";
 IF [W9_DeferredSwap] = "on" THEN [C5_DeferredSwapService] = "on";
-IF [W13_SeparateRTTopic] = "on" THEN [W7_IncPush] = "on";
-IF [W12_TTLRepush] = "on" THEN [W1_Topology] != "Nearline-only";
-IF [W10_TargetRegionPush] = "on" THEN [W2_NR] = "on";
-IF [R1_ClientType] != "DaVinci" THEN [R3_DaVinciStorage] = "N/A";
-IF [R1_ClientType] = "DaVinci" THEN [R3_DaVinciStorage] != "N/A";
-IF [R1_ClientType] != "Fast" THEN [R4_FastRouting] = "N/A";
-IF [R1_ClientType] = "Fast" THEN [R4_FastRouting] != "N/A";
-IF [R1_ClientType] != "DaVinci" THEN [R6_RecordTransformer] = "N/A";
-IF [R1_ClientType] = "DaVinci" THEN [R6_RecordTransformer] != "N/A";
+IF [W13_SeparateRTTopic] = "on" THEN [W7_IncrementalPush] = "on";
+IF [W12_TTLRepush] = "on" THEN [W1_Topology] <> "Nearline-only";
+IF [R1_ClientType] <> "DaVinci" THEN [R3_DaVinciStorage] = "N_A";
+IF [R1_ClientType] = "DaVinci" THEN [R3_DaVinciStorage] <> "N_A";
+IF [R1_ClientType] <> "Fast" THEN [R4_FastRouting] = "N_A";
+IF [R1_ClientType] = "Fast" THEN [R4_FastRouting] <> "N_A";
+IF [R1_ClientType] <> "DaVinci" THEN [R6_RecordTransformer] = "N_A";
+IF [R1_ClientType] = "DaVinci" THEN [R6_RecordTransformer] <> "N_A";
 IF [R1_ClientType] = "DaVinci" THEN [R5_LongTailRetry] = "off";
-IF [RT2_EarlyThrottle] = "on" THEN [RT1_ReadThrottling] = "on";
-IF [W3_AA] = "off" OR [W4_WC] = "off" THEN [S3_AAWCParallel] = "off";
-IF [W4_WC] = "on" THEN [W1_Topology] != "Batch-only";
-IF [W7_IncPush] = "on" THEN [W1_Topology] != "Nearline-only";
+IF [W4_WriteCompute] = "off" THEN [S3_AAWCParallel] = "off";
+IF [W4_WriteCompute] = "on" THEN [W1_Topology] <> "Batch-only";
+IF [W7_IncrementalPush] = "on" THEN [W1_Topology] <> "Nearline-only";
 ```
 
 ### Estimated Test Count
 
-For 42 dimensions with the above constraints, 3-way (t=3) combinatorial testing produces approximately **300-500 test
-cases**.
+With 34 active dimensions (9 fixed to MATURE values, 8 RT excluded), 2-way (t=2) combinatorial testing produces
+approximately **19 test cases** across **18 unique cluster configurations**.
 
 See `tests/venice-feature-matrix-test/src/test/resources/feature-matrix-model.pict` for the complete PICT model
 definition.
