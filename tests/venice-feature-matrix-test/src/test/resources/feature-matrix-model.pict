@@ -1,0 +1,109 @@
+# Venice Feature Matrix - PICT Model Definition
+# 42 dimensions across 5 component groups
+# Generate 3-way test cases: pict feature-matrix-model.pict /o:3 > generated-test-cases.tsv
+
+# ============================================================
+# Write Path - 13 dimensions
+# ============================================================
+W1_Topology:            Batch-only, Hybrid, Nearline-only
+W2_NativeReplication:   on, off
+W3_ActiveActive:        on, off
+W4_WriteCompute:        on, off
+W5_Chunking:            on, off
+W6_RmdChunking:         on, off
+W7_IncrementalPush:     on, off
+W8_Compression:         NO_OP, GZIP, ZSTD_WITH_DICT
+W9_DeferredSwap:        on, off
+W10_TargetRegionPush:   on, off
+W11_PushEngine:         MapReduce, Spark
+W12_TTLRepush:          on, off
+W13_SeparateRTTopic:    on, off
+
+# ============================================================
+# Read Path - 6 dimensions
+# ============================================================
+R1_ClientType:          Thin, Fast, DaVinci
+R2_ReadCompute:         on, off
+R3_DaVinciStorage:      MEMORY_BACKED_BY_DISK, MEMORY, N_A
+R4_FastRouting:         LEAST_LOADED, HELIX_ASSISTED, N_A
+R5_LongTailRetry:       on, off
+R6_RecordTransformer:   on, off, N_A
+
+# ============================================================
+# Server - 6 dimensions
+# ============================================================
+S1_ParallelBatchGet:    on, off
+S2_FastAvro:            on, off
+S3_AAWCParallel:        on, off
+S4_BlobTransfer:        on, off
+S5_QuotaEnforcement:    on, off
+S6_AdaptiveThrottler:   on, off
+
+# ============================================================
+# Controller - 9 dimensions
+# ============================================================
+C1_AADefaultHybrid:     on, off
+C2_WCAutoHybridAA:      on, off
+C3_IncPushAutoHybridAA: on, off
+C4_SeparateRTAutoIncPush: on, off
+C5_DeferredSwapService: on, off
+C6_SchemaValidation:    on, off
+C7_BackupVersionCleanup: on, off
+C8_SystemStoreAutoMat:  on, off
+C9_SupersetSchemaGen:   on, off
+
+# ============================================================
+# Router - 8 dimensions
+# ============================================================
+RT1_ReadThrottling:     on, off
+RT2_EarlyThrottle:      on, off
+RT3_SmartLongTailRetry: on, off
+RT4_RoutingStrategy:    LEAST_LOADED, HELIX_ASSISTED
+RT5_LatencyBasedRouting: on, off
+RT6_ClientDecompression: on, off
+RT7_Http2Inbound:       on, off
+RT8_ConnectionWarming:  on, off
+
+# ============================================================
+# Constraints
+# ============================================================
+
+# Replication hierarchy
+IF [W3_ActiveActive] = "on" THEN [W2_NativeReplication] = "on";
+IF [W4_WriteCompute] = "on" THEN [W3_ActiveActive] = "on";
+IF [W6_RmdChunking] = "on" THEN [W5_Chunking] = "on" AND [W3_ActiveActive] = "on";
+IF [W7_IncrementalPush] = "on" THEN [W3_ActiveActive] = "on";
+
+# Compression: ZSTD_WITH_DICT not valid for nearline-only
+IF [W1_Topology] = "Nearline-only" THEN [W8_Compression] != "ZSTD_WITH_DICT";
+
+# Cross-layer prerequisites
+IF [W9_DeferredSwap] = "on" THEN [C5_DeferredSwapService] = "on";
+
+# Separate RT topic requires incremental push
+IF [W13_SeparateRTTopic] = "on" THEN [W7_IncrementalPush] = "on";
+
+# TTL repush only meaningful for batch/hybrid
+IF [W12_TTLRepush] = "on" THEN [W1_Topology] != "Nearline-only";
+
+# Target region push requires multi-region (NR)
+IF [W10_TargetRegionPush] = "on" THEN [W2_NativeReplication] = "on";
+
+# Client-specific constraints
+IF [R1_ClientType] != "DaVinci" THEN [R3_DaVinciStorage] = "N_A";
+IF [R1_ClientType] = "DaVinci" THEN [R3_DaVinciStorage] != "N_A";
+IF [R1_ClientType] != "Fast" THEN [R4_FastRouting] = "N_A";
+IF [R1_ClientType] = "Fast" THEN [R4_FastRouting] != "N_A";
+IF [R1_ClientType] != "DaVinci" THEN [R6_RecordTransformer] = "N_A";
+IF [R1_ClientType] = "DaVinci" THEN [R6_RecordTransformer] != "N_A";
+IF [R1_ClientType] = "DaVinci" THEN [R5_LongTailRetry] = "off";
+
+# Router constraints
+IF [RT2_EarlyThrottle] = "on" THEN [RT1_ReadThrottling] = "on";
+
+# Server AA/WC parallel processing requires both AA and WC
+IF [W3_ActiveActive] = "off" OR [W4_WriteCompute] = "off" THEN [S3_AAWCParallel] = "off";
+
+# Write compute and incremental push require hybrid or hybrid-like topology
+IF [W4_WriteCompute] = "on" THEN [W1_Topology] != "Batch-only";
+IF [W7_IncrementalPush] = "on" THEN [W1_Topology] != "Nearline-only";

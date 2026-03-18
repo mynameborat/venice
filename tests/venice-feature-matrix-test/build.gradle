@@ -1,0 +1,54 @@
+dependencies {
+  // Integration test utilities (ServiceFactory, VeniceTwoLayerMultiRegionMultiClusterWrapper, etc.)
+  testImplementation project(path: ':internal:venice-test-common', configuration: 'integrationTestUtils')
+  testImplementation project(':internal:venice-test-common')
+  testImplementation project(':internal:venice-common')
+  testImplementation project(':internal:venice-client-common')
+  testImplementation project(':clients:venice-client')
+  testImplementation project(':clients:venice-thin-client')
+  testImplementation project(':clients:da-vinci-client')
+  testImplementation project(':clients:venice-push-job')
+  testImplementation project(':clients:venice-producer')
+  testImplementation project(':services:venice-controller')
+  testImplementation project(':services:venice-router')
+  testImplementation project(':services:venice-server')
+  testImplementation project(':integrations:venice-samza')
+
+  testImplementation libraries.testng
+  testImplementation libraries.log4j2api
+  testImplementation libraries.log4j2core
+  testImplementation libraries.avro
+  testImplementation libraries.kafkaClients
+}
+
+ext {
+  jacocoCoverageThreshold = 0.00
+}
+
+test {
+  // Feature matrix tests are resource-intensive; run with dedicated task
+  exclude '**/*'
+}
+
+task featureMatrixTest(type: Test) {
+  description = 'Runs the 3-way combinatorial feature matrix integration tests'
+  group = 'verification'
+  testClassesDirs = sourceSets.test.output.classesDirs
+  classpath = sourceSets.test.runtimeClasspath
+
+  useTestNG() {
+    listeners << 'com.linkedin.venice.featurematrix.reporting.FeatureMatrixReportListener'
+  }
+
+  // Each cluster config group gets its own forked JVM
+  forkEvery = 1
+  maxHeapSize = '4g'
+
+  systemProperty 'feature.matrix.report.dir', "${buildDir}/reports"
+
+  testLogging {
+    showStandardStreams = false
+    events 'passed', 'skipped', 'failed'
+    exceptionFormat = 'full'
+  }
+}
