@@ -237,12 +237,46 @@ All 16 Java source files compile clean against Venice's actual APIs.
 | 22  | `reporting/FeatureMatrixReportAggregator.java`  | ~200      | Created            |
 | 23  | `reporting/FeatureMatrixReportListener.java`    | ~150      | Created            |
 | 24  | `PROGRESS.md`                                   | this file | Created            |
+| 25  | `FeatureMatrixSmokeTest.java`                   | ~190      | Created            |
+| 26  | `generated-test-cases.tsv`                      | 26        | Generated (PICT)   |
 
 ---
 
-## Next Steps (to make tests runnable)
+## Phase 8: PICT Fix, Test Case Generation & Smoke Test
 
-1. Install PICT: `brew install pict`
-2. Generate test cases:
-   `pict src/test/resources/feature-matrix-model.pict /o:3 > src/test/resources/generated-test-cases.tsv`
-3. Run: `./gradlew :tests:venice-feature-matrix-test:featureMatrixTest`
+**Status**: COMPLETED
+
+**Summary**:
+
+- Fixed PICT constraint syntax: `!=` is not valid in PICT, replaced all 9 occurrences with `<>` (the correct not-equal
+  operator).
+- Installed PICT via `brew install pict` and generated 25 test cases using 2-way coverage (`/o:2`).
+- Generated `src/test/resources/generated-test-cases.tsv` (25 test cases from 42 dimensions with 21 constraints).
+- Created `FeatureMatrixSmokeTest.java` — a focused end-to-end smoke test that:
+  - Parses PICT output via `PictModelParser`
+  - Filters to batch-only + thin-client test cases (max 3)
+  - Creates a single-region `VeniceClusterWrapper` with S-dimension server properties
+  - Creates stores with W-dimension flags via `StoreConfigurator.buildUpdateParams()`
+  - Runs batch push via `IntegrationTestPushUtils.runVPJ()` (Spark DataWriter)
+  - Validates single get (100 keys) and batch get (100 keys) via thin client
+- Added `smokeTest` Gradle task in `build.gradle` for quick validation.
+- **2/2 smoke tests PASSED** in 39 seconds:
+  - TC1: Batch-only, NR=on, Chunking=on, GZIP, QuotaEnforcement=on — PASSED (5.6s)
+  - TC25: Batch-only, NR=off, ZSTD_WITH_DICT, ParallelBatchGet=on, DeferredSwap=on — PASSED (2.2s)
+
+**Files created/modified**:
+
+- `FeatureMatrixSmokeTest.java` (Created)
+- `generated-test-cases.tsv` (Generated)
+- `feature-matrix-model.pict` (Modified — fixed `!=` to `<>`)
+- `build.gradle` (Modified — added `smokeTest` task)
+
+---
+
+## Next Steps
+
+1. Wire up `FeatureMatrixIntegrationTest` with real push utilities (like smoke test does)
+2. Add hybrid/streaming write support (StreamingWriteExecutor using VeniceWriter/SystemProducer)
+3. Add Fast client and DaVinci client support
+4. Generate 3-way test cases (`pict /o:3`) for full coverage (~300-500 cases)
+5. Run full feature matrix test suite

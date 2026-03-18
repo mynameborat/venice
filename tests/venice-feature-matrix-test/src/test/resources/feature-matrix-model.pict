@@ -75,7 +75,7 @@ IF [W6_RmdChunking] = "on" THEN [W5_Chunking] = "on" AND [W3_ActiveActive] = "on
 IF [W7_IncrementalPush] = "on" THEN [W3_ActiveActive] = "on";
 
 # Compression: ZSTD_WITH_DICT not valid for nearline-only
-IF [W1_Topology] = "Nearline-only" THEN [W8_Compression] != "ZSTD_WITH_DICT";
+IF [W1_Topology] = "Nearline-only" THEN [W8_Compression] <> "ZSTD_WITH_DICT";
 
 # Cross-layer prerequisites
 IF [W9_DeferredSwap] = "on" THEN [C5_DeferredSwapService] = "on";
@@ -84,18 +84,18 @@ IF [W9_DeferredSwap] = "on" THEN [C5_DeferredSwapService] = "on";
 IF [W13_SeparateRTTopic] = "on" THEN [W7_IncrementalPush] = "on";
 
 # TTL repush only meaningful for batch/hybrid
-IF [W12_TTLRepush] = "on" THEN [W1_Topology] != "Nearline-only";
+IF [W12_TTLRepush] = "on" THEN [W1_Topology] <> "Nearline-only";
 
 # Target region push requires multi-region (NR)
 IF [W10_TargetRegionPush] = "on" THEN [W2_NativeReplication] = "on";
 
 # Client-specific constraints
-IF [R1_ClientType] != "DaVinci" THEN [R3_DaVinciStorage] = "N_A";
-IF [R1_ClientType] = "DaVinci" THEN [R3_DaVinciStorage] != "N_A";
-IF [R1_ClientType] != "Fast" THEN [R4_FastRouting] = "N_A";
-IF [R1_ClientType] = "Fast" THEN [R4_FastRouting] != "N_A";
-IF [R1_ClientType] != "DaVinci" THEN [R6_RecordTransformer] = "N_A";
-IF [R1_ClientType] = "DaVinci" THEN [R6_RecordTransformer] != "N_A";
+IF [R1_ClientType] <> "DaVinci" THEN [R3_DaVinciStorage] = "N_A";
+IF [R1_ClientType] = "DaVinci" THEN [R3_DaVinciStorage] <> "N_A";
+IF [R1_ClientType] <> "Fast" THEN [R4_FastRouting] = "N_A";
+IF [R1_ClientType] = "Fast" THEN [R4_FastRouting] <> "N_A";
+IF [R1_ClientType] <> "DaVinci" THEN [R6_RecordTransformer] = "N_A";
+IF [R1_ClientType] = "DaVinci" THEN [R6_RecordTransformer] <> "N_A";
 IF [R1_ClientType] = "DaVinci" THEN [R5_LongTailRetry] = "off";
 
 # Router constraints
@@ -105,5 +105,5 @@ IF [RT2_EarlyThrottle] = "on" THEN [RT1_ReadThrottling] = "on";
 IF [W3_ActiveActive] = "off" OR [W4_WriteCompute] = "off" THEN [S3_AAWCParallel] = "off";
 
 # Write compute and incremental push require hybrid or hybrid-like topology
-IF [W4_WriteCompute] = "on" THEN [W1_Topology] != "Batch-only";
-IF [W7_IncrementalPush] = "on" THEN [W1_Topology] != "Nearline-only";
+IF [W4_WriteCompute] = "on" THEN [W1_Topology] <> "Batch-only";
+IF [W7_IncrementalPush] = "on" THEN [W1_Topology] <> "Nearline-only";

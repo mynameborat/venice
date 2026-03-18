@@ -30,6 +30,24 @@ test {
   exclude '**/*'
 }
 
+task smokeTest(type: Test) {
+  description = 'Runs a quick smoke test with a few batch-only test cases'
+  group = 'verification'
+  testClassesDirs = sourceSets.test.output.classesDirs
+  classpath = sourceSets.test.runtimeClasspath
+
+  useTestNG()
+
+  include '**/FeatureMatrixSmokeTest*'
+  maxHeapSize = '4g'
+
+  testLogging {
+    showStandardStreams = true
+    events 'passed', 'skipped', 'failed'
+    exceptionFormat = 'full'
+  }
+}
+
 task featureMatrixTest(type: Test) {
   description = 'Runs the 3-way combinatorial feature matrix integration tests'
   group = 'verification'
