@@ -88,9 +88,10 @@ public class StoreConfigurator {
     // W8: Compression
     params.setCompressionStrategy(toCompressionStrategy(config.getCompression()));
 
-    // W9: Deferred swap needs a short targetRegionSwapWaitTime for tests (1 minute)
+    // W9: Deferred swap needs targetRegionSwapWaitTime on the store.
+    // Set to 0 (immediate swap after push completes) to avoid CI timeouts.
     if (config.isDeferredSwap()) {
-      params.setTargetRegionSwapWaitTime(1);
+      params.setTargetRegionSwapWaitTime(0);
     }
 
     // W12: TTL Repush - handled at push time
