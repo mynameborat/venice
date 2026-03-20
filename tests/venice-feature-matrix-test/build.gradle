@@ -87,6 +87,10 @@ task featureMatrixTest(type: Test) {
   maxParallelForks = 4
   maxHeapSize = '4g'
 
+  retry {
+    maxRetries = 1
+  }
+
   systemProperty 'feature.matrix.report.dir', "${buildDir}/reports"
 
   include '**/generated/FeatureMatrixTC*Test*'
@@ -118,6 +122,10 @@ task featureMatrixShardTest(type: Test) {
   forkEvery = 1
   maxParallelForks = 4
   maxHeapSize = '6g'
+
+  retry {
+    maxRetries = 1
+  }
 
   systemProperty 'feature.matrix.report.dir', "${buildDir}/reports"
 
