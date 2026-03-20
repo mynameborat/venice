@@ -48,9 +48,8 @@ public class FeatureMatrixClusterSetup {
     Properties parentControllerProps = ClusterConfigBuilder.buildParentControllerProperties(representativeConfig);
     Properties childControllerProps = ClusterConfigBuilder.buildChildControllerProperties(representativeConfig);
 
-    // Router properties need to be merged into server properties or passed separately
-    // depending on how the test wrapper handles them
-    Properties routerProps = ClusterConfigBuilder.buildRouterProperties(representativeConfig);
+    // TODO: Router properties not yet supported in VeniceMultiRegionClusterCreateOptions.
+    // See PICT model comments for details. Will be wired once routerProperties support is added.
 
     VeniceMultiRegionClusterCreateOptions options =
         new VeniceMultiRegionClusterCreateOptions.Builder().numberOfRegions(NUMBER_OF_REGIONS)
