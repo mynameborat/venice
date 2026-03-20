@@ -40,12 +40,16 @@ public class BatchPushExecutor {
         .setProperty(VenicePushJobConstants.DATA_WRITER_COMPUTE_JOB_CLASS, DataWriterSparkJob.class.getCanonicalName());
     vpjProps.setProperty(VenicePushJobConstants.SPARK_NATIVE_INPUT_FORMAT_ENABLED, "true");
 
-    if (config.isDeferredSwap()) {
-      vpjProps.setProperty(VenicePushJobConstants.DEFER_VERSION_SWAP, "true");
-    }
-
-    if (config.isTargetRegionPush()) {
-      vpjProps.setProperty(VenicePushJobConstants.TARGETED_REGION_PUSH_ENABLED, "true");
+    if (config.isTargetRegionPush() && config.isDeferredSwap()) {
+      // Combined flag: push to target region, then deferred swap service replicates and swaps
+      vpjProps.setProperty(VenicePushJobConstants.TARGETED_REGION_PUSH_WITH_DEFERRED_SWAP, "true");
+    } else {
+      if (config.isDeferredSwap()) {
+        vpjProps.setProperty(VenicePushJobConstants.DEFER_VERSION_SWAP, "true");
+      }
+      if (config.isTargetRegionPush()) {
+        vpjProps.setProperty(VenicePushJobConstants.TARGETED_REGION_PUSH_ENABLED, "true");
+      }
     }
 
     IntegrationTestPushUtils.runVPJ(vpjProps);

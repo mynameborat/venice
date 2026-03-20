@@ -82,6 +82,9 @@ public class ClusterConfigBuilder {
 
     // C5: Deferred version swap service
     props.setProperty(CONTROLLER_DEFERRED_VERSION_SWAP_SERVICE_ENABLED, String.valueOf(config.isDeferredSwapService()));
+    if (config.isDeferredSwapService()) {
+      props.setProperty(CONTROLLER_DEFERRED_VERSION_SWAP_SLEEP_MS, "1000");
+    }
 
     // C6: Schema validation
     if (config.isSchemaValidation()) {
