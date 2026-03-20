@@ -153,8 +153,10 @@ public abstract class AbstractFeatureMatrixShardTest {
       } else {
         BatchPushExecutor.executeBatchPush(storeName, config, multiRegionCluster, inputDir);
 
-        if (config.isDeferredSwap()) {
-          LOGGER.info("Waiting for deferred version swap for store {}", storeName);
+        if (config.isTargetRegionPush() && config.isDeferredSwap()) {
+          // Combined target-region push with deferred swap: the DeferredVersionSwapService
+          // handles replication and version swap automatically.
+          LOGGER.info("Waiting for deferred version swap (target region) for store {}", storeName);
           TestUtils.waitForNonDeterministicAssertion(120, TimeUnit.SECONDS, true, true, () -> {
             Map<String, Integer> coloVersions =
                 parentControllerClient.getStore(storeName).getStore().getColoToCurrentVersions();
@@ -162,6 +164,13 @@ public abstract class AbstractFeatureMatrixShardTest {
               Assert.assertTrue(entry.getValue() > 0, "Region " + entry.getKey() + " has no current version yet");
             }
           });
+        } else if (config.isDeferredSwap()) {
+          // Deferred swap only (no target region): VPJ defers the swap, so we must
+          // manually trigger it via rollForwardToFutureVersion. The push is already
+          // complete (BatchPushExecutor is synchronous), so rollForward is safe.
+          LOGGER.info("Manually triggering deferred version swap for store {}", storeName);
+          parentControllerClient.rollForwardToFutureVersion(storeName, "");
+          waitForStoreVersion(parentControllerClient, storeName);
         } else {
           waitForStoreVersion(parentControllerClient, storeName);
         }
