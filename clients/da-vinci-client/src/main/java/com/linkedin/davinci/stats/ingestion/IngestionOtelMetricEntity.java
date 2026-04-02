@@ -279,6 +279,12 @@ public enum IngestionOtelMetricEntity implements ModuleMetricEntityInterface {
       setOf(VENICE_STORE_NAME, VENICE_CLUSTER_NAME, VENICE_VERSION_ROLE)
   ),
 
+  STUCK_PARTITION_COUNT(
+      "ingestion.stuck_partition.count", MetricType.COUNTER, MetricUnit.NUMBER,
+      "Count of stuck partitions detected (assigned but never consumed data)",
+      setOf(VENICE_STORE_NAME, VENICE_CLUSTER_NAME, VENICE_VERSION_ROLE)
+  ),
+
   PARTIAL_UPDATE_CACHE_HIT_COUNT(
       "ingestion.partial_update.cache.hit_count", MetricType.COUNTER, MetricUnit.NUMBER,
       "Count of partial update cache hits", setOf(VENICE_STORE_NAME, VENICE_CLUSTER_NAME, VENICE_VERSION_ROLE)

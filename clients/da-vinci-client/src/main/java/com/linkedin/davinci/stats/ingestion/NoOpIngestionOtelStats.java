@@ -210,6 +210,10 @@ public class NoOpIngestionOtelStats extends IngestionOtelStats {
   }
 
   @Override
+  public void recordStuckPartitionCount(int version, long value) {
+  }
+
+  @Override
   public void recordPartialUpdateCacheHitCount(int version, long value) {
   }
 

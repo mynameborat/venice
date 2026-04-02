@@ -47,6 +47,7 @@ import static com.linkedin.davinci.stats.ingestion.IngestionOtelMetricEntity.RT_
 import static com.linkedin.davinci.stats.ingestion.IngestionOtelMetricEntity.STORAGE_ENGINE_DELETE_TIME;
 import static com.linkedin.davinci.stats.ingestion.IngestionOtelMetricEntity.STORAGE_ENGINE_PUT_TIME;
 import static com.linkedin.davinci.stats.ingestion.IngestionOtelMetricEntity.STORE_METADATA_INCONSISTENT_COUNT;
+import static com.linkedin.davinci.stats.ingestion.IngestionOtelMetricEntity.STUCK_PARTITION_COUNT;
 import static com.linkedin.davinci.stats.ingestion.IngestionOtelMetricEntity.UNEXPECTED_MESSAGE_COUNT;
 import static com.linkedin.davinci.stats.ingestion.IngestionOtelMetricEntity.VIEW_WRITER_ACK_TIME;
 import static com.linkedin.davinci.stats.ingestion.IngestionOtelMetricEntity.VIEW_WRITER_PRODUCE_TIME;
@@ -170,6 +171,7 @@ public class IngestionOtelStats {
   private final MetricEntityStateOneEnum<VersionRole> unexpectedMessageCountMetric;
   private final MetricEntityStateOneEnum<VersionRole> storeMetadataInconsistentCountMetric;
   private final MetricEntityStateOneEnum<VersionRole> resubscriptionFailureCountMetric;
+  private final MetricEntityStateOneEnum<VersionRole> stuckPartitionCountMetric;
   private final MetricEntityStateOneEnum<VersionRole> partialUpdateCacheHitCountMetric;
   private final MetricEntityStateOneEnum<VersionRole> checksumVerificationFailureCountMetric;
 
@@ -240,6 +242,7 @@ public class IngestionOtelStats {
     this.unexpectedMessageCountMetric = null;
     this.storeMetadataInconsistentCountMetric = null;
     this.resubscriptionFailureCountMetric = null;
+    this.stuckPartitionCountMetric = null;
     this.partialUpdateCacheHitCountMetric = null;
     this.checksumVerificationFailureCountMetric = null;
     this.ingestionFailureCountMetric = null;
@@ -365,6 +368,7 @@ public class IngestionOtelStats {
     unexpectedMessageCountMetric = createOneEnumMetric(UNEXPECTED_MESSAGE_COUNT.getMetricEntity());
     storeMetadataInconsistentCountMetric = createOneEnumMetric(STORE_METADATA_INCONSISTENT_COUNT.getMetricEntity());
     resubscriptionFailureCountMetric = createOneEnumMetric(RESUBSCRIPTION_FAILURE_COUNT.getMetricEntity());
+    stuckPartitionCountMetric = createOneEnumMetric(STUCK_PARTITION_COUNT.getMetricEntity());
     partialUpdateCacheHitCountMetric = createOneEnumMetric(PARTIAL_UPDATE_CACHE_HIT_COUNT.getMetricEntity());
     checksumVerificationFailureCountMetric = createOneEnumMetric(CHECKSUM_VERIFICATION_FAILURE_COUNT.getMetricEntity());
 
@@ -729,6 +733,10 @@ public class IngestionOtelStats {
 
   public void recordResubscriptionFailureCount(int version, long value) {
     resubscriptionFailureCountMetric.record(value, classifyVersion(version, versionInfo));
+  }
+
+  public void recordStuckPartitionCount(int version, long value) {
+    stuckPartitionCountMetric.record(value, classifyVersion(version, versionInfo));
   }
 
   public void recordPartialUpdateCacheHitCount(int version, long value) {

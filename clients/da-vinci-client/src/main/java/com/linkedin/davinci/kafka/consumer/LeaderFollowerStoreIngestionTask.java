@@ -695,9 +695,14 @@ public class LeaderFollowerStoreIngestionTask extends StoreIngestionTask {
       // This catches xinfra consumer stalls (LIKAFKA-68252) where the partition is assigned
       // but consumer.poll() never returns records.
       // Alert-only — does NOT report ERROR. The stall may resolve on its own.
+      //
+      // Alerting: grep server logs for "has not consumed any data" at WARN level.
+      // The log includes partition ID, version topic, host, leader state, and elapsed minutes.
+      // Timeout configurable via server.ingestion.stuck.partition.timeout.ms (default 15 min).
       if (!partitionConsumptionState.isComplete() && !partitionConsumptionState.isErrorReported()
           && !partitionConsumptionState.isStarted() && LatencyUtils.getElapsedTimeFromMsToMs(
               partitionConsumptionState.getConsumptionStartTimeInMs()) > getStuckPartitionTimeoutMs()) {
+        versionedIngestionStats.recordStuckPartitionCount(storeName, versionNumber);
         String stuckKey = "stuck-partition-" + partitionConsumptionState.getReplicaId();
         if (!REDUNDANT_LOGGING_FILTER.isRedundantException(stuckKey)) {
           LOGGER.warn(

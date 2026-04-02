@@ -511,6 +511,10 @@ public class AggVersionedIngestionStats
     getIngestionOtelStats(storeName).recordResubscriptionFailureCount(version, 1);
   }
 
+  public void recordStuckPartitionCount(String storeName, int version) {
+    getIngestionOtelStats(storeName).recordStuckPartitionCount(version, 1);
+  }
+
   public void recordPartialUpdateCacheHitCount(String storeName, int version) {
     getIngestionOtelStats(storeName).recordPartialUpdateCacheHitCount(version, 1);
   }
