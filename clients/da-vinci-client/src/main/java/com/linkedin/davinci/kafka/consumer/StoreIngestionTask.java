@@ -6009,6 +6009,10 @@ public abstract class StoreIngestionTask implements Runnable, Closeable {
     return bootstrapTimeoutInMs;
   }
 
+  long getStuckPartitionTimeoutMs() {
+    return serverConfig.getIngestionStuckPartitionTimeoutMs();
+  }
+
   ReadOnlyStoreRepository getStoreRepository() {
     return storeRepository;
   }

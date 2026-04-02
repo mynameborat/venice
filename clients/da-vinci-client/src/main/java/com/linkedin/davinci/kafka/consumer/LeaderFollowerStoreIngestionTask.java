@@ -690,6 +690,28 @@ public class LeaderFollowerStoreIngestionTask extends StoreIngestionTask {
         }
         timeoutPartitions.add(partition);
       }
+
+      // Alert on stuck partition: assigned but never consumed any data.
+      // This catches xinfra consumer stalls (LIKAFKA-68252) where the partition is assigned
+      // but consumer.poll() never returns records.
+      // Alert-only — does NOT report ERROR. The stall may resolve on its own.
+      if (!partitionConsumptionState.isComplete() && !partitionConsumptionState.isErrorReported()
+          && !partitionConsumptionState.isStarted() && LatencyUtils.getElapsedTimeFromMsToMs(
+              partitionConsumptionState.getConsumptionStartTimeInMs()) > getStuckPartitionTimeoutMs()) {
+        String stuckKey = "stuck-partition-" + partitionConsumptionState.getReplicaId();
+        if (!REDUNDANT_LOGGING_FILTER.isRedundantException(stuckKey)) {
+          LOGGER.warn(
+              "Partition {} of {} has been assigned for {} minutes but has not consumed any data. "
+                  + "This may indicate a stuck consumer (e.g., xinfra consumer stall). " + "Host: {}, LeaderState: {}",
+              partition,
+              getKafkaVersionTopic(),
+              TimeUnit.MILLISECONDS.toMinutes(
+                  LatencyUtils.getElapsedTimeFromMsToMs(partitionConsumptionState.getConsumptionStartTimeInMs())),
+              Utils.getHostName(),
+              partitionConsumptionState.getLeaderFollowerState());
+        }
+      }
+
       switch (partitionConsumptionState.getLeaderFollowerState()) {
         case PAUSE_TRANSITION_FROM_STANDBY_TO_LEADER:
           Store store = storeRepository.getStoreOrThrow(storeName);

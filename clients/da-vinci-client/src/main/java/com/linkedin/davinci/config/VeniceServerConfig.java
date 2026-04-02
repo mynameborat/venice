@@ -130,6 +130,7 @@ import static com.linkedin.venice.ConfigKeys.SERVER_INGESTION_CHECKPOINT_DURING_
 import static com.linkedin.venice.ConfigKeys.SERVER_INGESTION_HEARTBEAT_INTERVAL_MS;
 import static com.linkedin.venice.ConfigKeys.SERVER_INGESTION_INFO_LOG_LINE_LIMIT;
 import static com.linkedin.venice.ConfigKeys.SERVER_INGESTION_OTEL_STATS_ENABLED;
+import static com.linkedin.venice.ConfigKeys.SERVER_INGESTION_STUCK_PARTITION_TIMEOUT_MS;
 import static com.linkedin.venice.ConfigKeys.SERVER_INGESTION_TASK_MAX_IDLE_COUNT;
 import static com.linkedin.venice.ConfigKeys.SERVER_INGESTION_TASK_REUSABLE_OBJECTS_STRATEGY;
 import static com.linkedin.venice.ConfigKeys.SERVER_KAFKA_CONSUMER_OFFSET_COLLECTION_ENABLED;
@@ -456,6 +457,8 @@ public class VeniceServerConfig extends VeniceClusterConfig {
    * Server disk health check timeout.
    */
   private final long diskHealthCheckTimeoutInMs;
+
+  private final long ingestionStuckPartitionTimeoutMs;
 
   private final boolean diskHealthCheckServiceEnabled;
 
@@ -874,6 +877,8 @@ public class VeniceServerConfig extends VeniceClusterConfig {
         TimeUnit.SECONDS.toMillis(serverProperties.getLong(SERVER_DISK_HEALTH_CHECK_INTERVAL_IN_SECONDS, 10));
     diskHealthCheckTimeoutInMs =
         TimeUnit.SECONDS.toMillis(serverProperties.getLong(SERVER_DISK_HEALTH_CHECK_TIMEOUT_IN_SECONDS, 30));
+    ingestionStuckPartitionTimeoutMs =
+        serverProperties.getLong(SERVER_INGESTION_STUCK_PARTITION_TIMEOUT_MS, 15 * 60 * 1000L);
     diskHealthCheckServiceEnabled = serverProperties.getBoolean(SERVER_DISK_HEALTH_CHECK_SERVICE_ENABLED, true);
     serverMaxWaitForVersionInfo =
         Duration.ofMillis(serverProperties.getLong(SERVER_MAX_WAIT_FOR_VERSION_INFO_MS_CONFIG, 5000));
@@ -1472,6 +1477,10 @@ public class VeniceServerConfig extends VeniceClusterConfig {
 
   public long getDiskHealthCheckTimeoutInMs() {
     return diskHealthCheckTimeoutInMs;
+  }
+
+  public long getIngestionStuckPartitionTimeoutMs() {
+    return ingestionStuckPartitionTimeoutMs;
   }
 
   public boolean isDiskHealthCheckServiceEnabled() {

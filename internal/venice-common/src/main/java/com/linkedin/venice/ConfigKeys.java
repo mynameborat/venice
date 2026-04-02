@@ -3284,6 +3284,15 @@ public class ConfigKeys {
   public static final String SERVER_INGESTION_INFO_LOG_LINE_LIMIT = "server.ingestion.info.log.line.limit";
 
   /**
+   * Timeout in milliseconds for detecting stuck partitions during ingestion. If a partition has been
+   * assigned for longer than this duration and has not consumed any data (offset still at earliest),
+   * the server logs a WARN. Alert-only — does not fail the push.
+   * Default: 15 minutes.
+   */
+  public static final String SERVER_INGESTION_STUCK_PARTITION_TIMEOUT_MS =
+      "server.ingestion.stuck.partition.timeout.ms";
+
+  /**
    * Experiment config to skip the compaction policy update for hybrid store real-time topic during update store operation
    */
   public static final String SKIP_HYBRID_STORE_RT_TOPIC_COMPACTION_POLICY_UPDATE_ENABLED =

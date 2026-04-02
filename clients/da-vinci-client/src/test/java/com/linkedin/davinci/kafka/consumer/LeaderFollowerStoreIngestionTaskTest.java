@@ -1634,6 +1634,66 @@ public class LeaderFollowerStoreIngestionTaskTest {
   }
 
   @Test
+  public void testStuckPartitionAlertDoesNotReportError() throws Exception {
+    LeaderFollowerStoreIngestionTask storeIngestionTask = mock(LeaderFollowerStoreIngestionTask.class);
+
+    // Set up fields accessed directly by the real checkLongRunningTaskState method
+    AggVersionedIngestionStats mockVersionedIngestionStats = mock(AggVersionedIngestionStats.class);
+    HostLevelIngestionStats mockHostLevelStats = mock(HostLevelIngestionStats.class);
+    AtomicBoolean emitTehutiMetrics = new AtomicBoolean(false);
+    setField(storeIngestionTask, "versionedIngestionStats", mockVersionedIngestionStats);
+    setField(storeIngestionTask, "hostLevelIngestionStats", mockHostLevelStats);
+    setField(storeIngestionTask, "emitTehutiMetrics", emitTehutiMetrics);
+    setField(storeIngestionTask, "storeName", "foo");
+
+    doReturn("foo").when(storeIngestionTask).getStoreName();
+    doReturn(Lazy.of(() -> mock(VeniceWriter.class))).when(storeIngestionTask).getVeniceWriter();
+    doReturn(Lazy.of(() -> mock(VeniceWriter.class))).when(storeIngestionTask).getVeniceWriterForRealTime();
+    doCallRealMethod().when(storeIngestionTask).isEmitTehutiMetricsEnabled();
+    ReadOnlyStoreRepository storeRepository = mock(ReadOnlyStoreRepository.class);
+    doReturn(storeRepository).when(storeIngestionTask).getStoreRepository();
+    Store store = mock(Store.class);
+    doReturn(5).when(store).getCurrentVersion();
+    doReturn(store).when(storeRepository).getStoreOrThrow(anyString());
+
+    // Bootstrap timeout very large so it doesn't trigger
+    doReturn(TimeUnit.DAYS.toMillis(10)).when(storeIngestionTask).getBootstrapTimeoutInMs();
+    // Stuck partition timeout very short so it triggers
+    doReturn(100L).when(storeIngestionTask).getStuckPartitionTimeoutMs();
+
+    PubSubTopic topic = new PubSubTopicImpl("foo_v1");
+    doReturn(topic).when(storeIngestionTask).getVersionTopic();
+    doReturn("foo_v1").when(storeIngestionTask).getKafkaVersionTopic();
+    doCallRealMethod().when(storeIngestionTask).checkLongRunningTaskState();
+    Map<Integer, PartitionConsumptionState> pcsMap = new HashMap<>();
+    doReturn(pcsMap).when(storeIngestionTask).getPartitionConsumptionStateMap();
+
+    // Create a stuck partition: assigned 20 minutes ago, never consumed any data
+    PartitionConsumptionState stuckPcs = mock(PartitionConsumptionState.class);
+    pcsMap.put(1, stuckPcs);
+    doReturn(LeaderFollowerStateType.STANDBY).when(stuckPcs).getLeaderFollowerState();
+    doReturn(false).when(stuckPcs).isComplete();
+    doReturn(false).when(stuckPcs).isErrorReported();
+    doReturn(false).when(stuckPcs).isStarted();
+    doReturn(1).when(stuckPcs).getPartition();
+    doReturn("foo_v1-1").when(stuckPcs).getReplicaId();
+    doReturn(System.currentTimeMillis() - TimeUnit.MINUTES.toMillis(20)).when(stuckPcs).getConsumptionStartTimeInMs();
+    // Not blob transfer or record transformer recovery
+    doReturn(false).when(stuckPcs).isBlobTransferInProgress();
+    doReturn(false).when(stuckPcs).isRecordTransformerRecoveryInProgress();
+
+    // Set version to future (v10 > currentVersion=5) so bootstrap timeout would throw, but
+    // we set it very high so it won't trigger
+    setVersion(storeIngestionTask, 10);
+
+    // Execute: should NOT throw, should NOT call reportError
+    storeIngestionTask.checkLongRunningTaskState();
+
+    // Verify: reportError was never called — the stuck partition alert is WARN-only
+    verify(storeIngestionTask, never()).reportError(anyString(), anyInt(), any());
+  }
+
+  @Test
   public void testStopTrackingCurrentVersionIngestionOnDemotion() throws Exception {
     LeaderFollowerStoreIngestionTask storeIngestionTask = mock(LeaderFollowerStoreIngestionTask.class);
     VeniceServerConfig serverConfig = mock(VeniceServerConfig.class);
