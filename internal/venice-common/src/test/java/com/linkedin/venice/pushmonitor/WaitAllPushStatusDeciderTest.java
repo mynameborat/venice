@@ -6,8 +6,11 @@ import static com.linkedin.venice.pushmonitor.ExecutionStatus.STARTED;
 
 import com.linkedin.venice.helix.HelixState;
 import com.linkedin.venice.meta.Instance;
+import com.linkedin.venice.meta.OfflinePushStrategy;
 import com.linkedin.venice.meta.PartitionAssignment;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
@@ -74,5 +77,46 @@ public class WaitAllPushStatusDeciderTest extends TestPushStatusDecider {
     Assert.assertEquals(
         statusDecider.getPartitionStatus(partitionStatus, replicationFactor, instanceToStateMap, null),
         COMPLETED);
+  }
+
+  @Test
+  public void testCheckPushStatusReturnsBlockingPartitionDetails() {
+    OfflinePushStatus pushStatus = new OfflinePushStatus(
+        "testTopic_v1",
+        numberOfPartition,
+        replicationFactor,
+        OfflinePushStrategy.WAIT_ALL_REPLICAS);
+
+    PartitionAssignment localPartitionAssignment = new PartitionAssignment("testTopic_v1", numberOfPartition);
+    createPartitions(numberOfPartition, replicationFactor);
+    // Copy partitions into our local assignment using the field set up by setUp()
+    for (int i = 0; i < numberOfPartition; i++) {
+      localPartitionAssignment.addPartition(partitionAssignment.getPartition(i));
+    }
+
+    // Partition 0: all replicas COMPLETED
+    PartitionStatus p0 = new PartitionStatus(0);
+    for (int r = 0; r < replicationFactor; r++) {
+      p0.updateReplicaStatus("instance" + r, ExecutionStatus.COMPLETED);
+    }
+    pushStatus.setPartitionStatus(p0);
+
+    // Partition 1: all replicas still in STARTED (stuck)
+    PartitionStatus p1 = new PartitionStatus(1);
+    List<ReplicaStatus> replicas = new ArrayList<>();
+    for (int r = 0; r < replicationFactor; r++) {
+      replicas.add(new ReplicaStatus("instance" + r));
+    }
+    p1.setReplicaStatuses(replicas);
+    pushStatus.setPartitionStatus(p1);
+
+    ExecutionStatusWithDetails result = new WaitAllPushStatusDecider()
+        .checkPushStatusAndDetailsByPartitionsStatus(pushStatus, localPartitionAssignment, null);
+
+    Assert.assertEquals(result.getStatus(), ExecutionStatus.STARTED);
+    Assert.assertNotNull(result.getDetails(), "Details should identify blocking partitions");
+    Assert.assertTrue(
+        result.getDetails().contains("1"),
+        "Details should include partition 1 as blocking: " + result.getDetails());
   }
 }

@@ -15,6 +15,7 @@ import com.linkedin.venice.meta.OfflinePushStrategy;
 import com.linkedin.venice.meta.Partition;
 import com.linkedin.venice.meta.PartitionAssignment;
 import com.linkedin.venice.systemstore.schemas.StoreReplicaStatus;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
@@ -49,6 +50,7 @@ public abstract class PushStatusDecider {
 
     boolean isAllPartitionCompleted = true;
     boolean isAllPartitionEndOfPushReceived = true;
+    List<Integer> notReadyPartitions = new ArrayList<>();
     if (pushStatus.getPartitionStatuses().size() != pushStatus.getNumberOfPartition()) {
       isAllPartitionCompleted = false;
       isAllPartitionEndOfPushReceived = false;
@@ -79,6 +81,7 @@ public abstract class PushStatusDecider {
 
         if (!executionStatus.equals(END_OF_PUSH_RECEIVED) && !executionStatus.equals(COMPLETED)) {
           isAllPartitionEndOfPushReceived = false;
+          notReadyPartitions.add(partitionId);
         }
       }
     }
@@ -89,7 +92,10 @@ public abstract class PushStatusDecider {
     if (isAllPartitionEndOfPushReceived) {
       return new ExecutionStatusWithDetails(END_OF_PUSH_RECEIVED);
     }
-    return new ExecutionStatusWithDetails(STARTED);
+    if (notReadyPartitions.isEmpty()) {
+      return new ExecutionStatusWithDetails(STARTED);
+    }
+    return new ExecutionStatusWithDetails(STARTED, "partitions not ready: " + notReadyPartitions);
   }
 
   public static List<Instance> getReadyToServeInstances(
