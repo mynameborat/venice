@@ -277,6 +277,41 @@ public class OfflinePushStatusTest {
         "After stuck partition recovers, buffer replay should proceed");
   }
 
+  @Test
+  public void testGetPartitionsNotReceivedEOP() {
+    int numPartitions = 5;
+    OfflinePushStatus offlinePushStatus = new OfflinePushStatus(kafkaTopic, numPartitions, replicationFactor, strategy);
+    List<PartitionStatus> partitionStatuses = new ArrayList<>(numPartitions);
+    for (int p = 0; p < numPartitions; p++) {
+      PartitionStatus partitionStatus = new PartitionStatus(p);
+      List<ReplicaStatus> replicaStatuses = new ArrayList<>(replicationFactor);
+      for (int r = 0; r < replicationFactor; r++) {
+        replicaStatuses.add(new ReplicaStatus(Integer.toString(r)));
+      }
+      partitionStatus.setReplicaStatuses(replicaStatuses);
+      if (p != 2 && p != 4) {
+        for (int r = 0; r < replicationFactor; r++) {
+          partitionStatus.updateReplicaStatus(Integer.toString(r), END_OF_PUSH_RECEIVED);
+        }
+      }
+      partitionStatuses.add(partitionStatus);
+    }
+    offlinePushStatus.setPartitionStatuses(partitionStatuses);
+
+    List<Integer> blocking = offlinePushStatus.getPartitionsNotReceivedEOP(false);
+    Assert.assertEquals(blocking.size(), 2, "Should identify partitions 2 and 4 as blocking");
+    Assert.assertTrue(blocking.contains(2));
+    Assert.assertTrue(blocking.contains(4));
+
+    // When all partitions have EOP, should return empty list
+    for (int r = 0; r < replicationFactor; r++) {
+      partitionStatuses.get(2).updateReplicaStatus(Integer.toString(r), END_OF_PUSH_RECEIVED);
+      partitionStatuses.get(4).updateReplicaStatus(Integer.toString(r), END_OF_PUSH_RECEIVED);
+    }
+    offlinePushStatus.setPartitionStatuses(partitionStatuses);
+    Assert.assertTrue(offlinePushStatus.getPartitionsNotReceivedEOP(false).isEmpty());
+  }
+
   /**
    * Regression test for VENG-12606: Verify that once push status has been updated to
    * END_OF_PUSH_RECEIVED, isEOPReceivedInEveryPartition correctly returns false

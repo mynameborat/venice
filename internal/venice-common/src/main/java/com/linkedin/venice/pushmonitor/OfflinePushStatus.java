@@ -467,6 +467,37 @@ public class OfflinePushStatus {
     return isReady;
   }
 
+  /**
+   * Returns the list of partition IDs that have NOT received END_OF_PUSH from any replica.
+   * Used for diagnostic logging when isEOPReceivedInEveryPartition returns false.
+   */
+  public List<Integer> getPartitionsNotReceivedEOP(boolean isDataRecovery) {
+    ExecutionStatus requiredStatus = isDataRecovery ? DATA_RECOVERY_COMPLETED : END_OF_PUSH_RECEIVED;
+    List<Integer> missingPartitions = new ArrayList<>();
+    for (PartitionStatus partitionStatus: getPartitionStatuses()) {
+      boolean hasEOP = false;
+      for (ReplicaStatus replicaStatus: partitionStatus.getReplicaStatuses()) {
+        if (replicaStatus.getCurrentStatus() == requiredStatus) {
+          hasEOP = true;
+          break;
+        }
+        for (StatusSnapshot snapshot: replicaStatus.getStatusHistory()) {
+          if (snapshot.getStatus() == requiredStatus) {
+            hasEOP = true;
+            break;
+          }
+        }
+        if (hasEOP) {
+          break;
+        }
+      }
+      if (!hasEOP) {
+        missingPartitions.add(partitionStatus.getPartitionId());
+      }
+    }
+    return missingPartitions;
+  }
+
   public Map<String, String> getPushProperties() {
     return pushProperties;
   }

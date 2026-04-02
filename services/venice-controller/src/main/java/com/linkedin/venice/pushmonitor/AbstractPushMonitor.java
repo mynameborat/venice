@@ -971,10 +971,12 @@ public abstract class AbstractPushMonitor
           newStatusDetails.append("kicked off buffer replay");
         } else if (!offlinePushStatus.getCurrentStatus().isTerminal()) {
           if (!REDUNDANT_EXCEPTION_FILTER.isRedundantException(offlinePushStatus.getKafkaTopic())) {
+            List<Integer> missingPartitions = offlinePushStatus.getPartitionsNotReceivedEOP(isDataRecovery);
             LOGGER.info(
-                "{} is not ready to start buffer replay. Current state: {}",
+                "{} is not ready to start buffer replay. Current state: {}. Partitions missing EOP: {}",
                 offlinePushStatus.getKafkaTopic(),
-                offlinePushStatus.getCurrentStatus().toString());
+                offlinePushStatus.getCurrentStatus().toString(),
+                missingPartitions);
           }
         }
       }
