@@ -113,6 +113,198 @@ public class OfflinePushStatusTest {
         "Buffer replay should be allowed to start since END_OF_PUSH_RECEIVED was already received");
   }
 
+  /**
+   * Regression test for VENG-12606: Controller leadership transfer causes push state mismatch.
+   *
+   * After a leadership transfer, the new controller loads push status from ZK which may still be STARTED.
+   * Meanwhile, servers have already received TOPIC_SWITCH and their replica status in ZK shows
+   * TOPIC_SWITCH_RECEIVED (having passed through END_OF_PUSH_RECEIVED).
+   *
+   * isEOPReceivedInEveryPartition() must still detect END_OF_PUSH_RECEIVED in the replica status history
+   * even when the current replica status has advanced to TOPIC_SWITCH_RECEIVED.
+   */
+  @Test
+  public void testIsReadyToStartBufferReplayWhenReplicasAtTopicSwitchReceived() {
+    // Simulate post-failover state: push status is STARTED (stale from ZK)
+    // but replicas have progressed through END_OF_PUSH_RECEIVED to TOPIC_SWITCH_RECEIVED
+    int numPartitions = 3;
+    OfflinePushStatus offlinePushStatus = new OfflinePushStatus(kafkaTopic, numPartitions, replicationFactor, strategy);
+    List<PartitionStatus> partitionStatuses = new ArrayList<>(numPartitions);
+    for (int p = 0; p < numPartitions; p++) {
+      PartitionStatus partitionStatus = new PartitionStatus(p);
+      List<ReplicaStatus> replicaStatuses = new ArrayList<>(replicationFactor);
+      for (int r = 0; r < replicationFactor; r++) {
+        replicaStatuses.add(new ReplicaStatus("instance_" + r));
+      }
+      partitionStatus.setReplicaStatuses(replicaStatuses);
+      // Replicas progressed: STARTED -> END_OF_PUSH_RECEIVED -> TOPIC_SWITCH_RECEIVED
+      for (int r = 0; r < replicationFactor; r++) {
+        partitionStatus.updateReplicaStatus("instance_" + r, END_OF_PUSH_RECEIVED);
+        partitionStatus.updateReplicaStatus("instance_" + r, TOPIC_SWITCH_RECEIVED);
+      }
+      partitionStatuses.add(partitionStatus);
+    }
+    offlinePushStatus.setPartitionStatuses(partitionStatuses);
+
+    // Push status is STARTED (as loaded from ZK after failover)
+    Assert.assertEquals(offlinePushStatus.getCurrentStatus(), STARTED);
+    Assert.assertTrue(
+        offlinePushStatus.isEOPReceivedInEveryPartition(false),
+        "Buffer replay should be detected as ready even when replicas have advanced past "
+            + "END_OF_PUSH_RECEIVED to TOPIC_SWITCH_RECEIVED, since END_OF_PUSH_RECEIVED is in history");
+  }
+
+  /**
+   * Regression test for VENG-12606: Verify that isEOPReceivedInEveryPartition returns false when
+   * partition statuses are empty placeholders (no replica data), simulating a failover where
+   * ZK partition status ZNodes haven't been populated yet.
+   */
+  @Test
+  public void testIsNotReadyToStartBufferReplayWhenPartitionStatusesEmpty() {
+    int numPartitions = 3;
+    OfflinePushStatus offlinePushStatus = new OfflinePushStatus(kafkaTopic, numPartitions, replicationFactor, strategy);
+
+    // Simulate empty partition statuses (as returned by VeniceOfflinePushMonitorAccessor.getPartitionStatuses
+    // when ZK nodes haven't been populated — lines 371-378)
+    List<PartitionStatus> emptyPartitionStatuses = new ArrayList<>(numPartitions);
+    for (int p = 0; p < numPartitions; p++) {
+      emptyPartitionStatuses.add(new PartitionStatus(p)); // No replica statuses
+    }
+    offlinePushStatus.setPartitionStatuses(emptyPartitionStatuses);
+
+    Assert.assertEquals(offlinePushStatus.getCurrentStatus(), STARTED);
+    Assert.assertFalse(
+        offlinePushStatus.isEOPReceivedInEveryPartition(false),
+        "Buffer replay should NOT be ready when partition statuses have no replica data");
+  }
+
+  /**
+   * Regression test for VENG-12606: Verify behavior when only some partitions have replicas
+   * at TOPIC_SWITCH_RECEIVED while others are still empty (partial ZK update during failover).
+   */
+  @Test
+  public void testIsNotReadyToStartBufferReplayWhenPartialPartitionData() {
+    int numPartitions = 3;
+    OfflinePushStatus offlinePushStatus = new OfflinePushStatus(kafkaTopic, numPartitions, replicationFactor, strategy);
+    List<PartitionStatus> partitionStatuses = new ArrayList<>(numPartitions);
+
+    // Partition 0: has replica data with TOPIC_SWITCH_RECEIVED (and EOP in history)
+    PartitionStatus p0 = new PartitionStatus(0);
+    List<ReplicaStatus> replicas0 = new ArrayList<>();
+    for (int r = 0; r < replicationFactor; r++) {
+      replicas0.add(new ReplicaStatus("instance_" + r));
+    }
+    p0.setReplicaStatuses(replicas0);
+    for (int r = 0; r < replicationFactor; r++) {
+      p0.updateReplicaStatus("instance_" + r, END_OF_PUSH_RECEIVED);
+      p0.updateReplicaStatus("instance_" + r, TOPIC_SWITCH_RECEIVED);
+    }
+    partitionStatuses.add(p0);
+
+    // Partitions 1 and 2: empty (no replica data — simulates incomplete ZK state)
+    for (int p = 1; p < numPartitions; p++) {
+      partitionStatuses.add(new PartitionStatus(p));
+    }
+    offlinePushStatus.setPartitionStatuses(partitionStatuses);
+
+    Assert.assertEquals(offlinePushStatus.getCurrentStatus(), STARTED);
+    Assert.assertFalse(
+        offlinePushStatus.isEOPReceivedInEveryPartition(false),
+        "Buffer replay should NOT be ready when some partitions have no replica data");
+  }
+
+  /**
+   * Regression test for VENG-12606: Reproduces the actual production failure.
+   *
+   * Root cause: A single partition's server is stuck on xinfra position determination
+   * (PubSubPosition.PENDING in KafkaConsumerHandler — no timeout, hangs forever).
+   * The server never reaches END_OF_PUSH_RECEIVED for that partition.
+   *
+   * Meanwhile, all other partitions (99/100 in production, 9/10 here) have replicas
+   * that progressed through END_OF_PUSH_RECEIVED to TOPIC_SWITCH_RECEIVED normally.
+   *
+   * isEOPReceivedInEveryPartition() requires ALL partitions to have EOP. One stuck
+   * partition blocks buffer replay for the entire store, and the push hangs until killed.
+   */
+  @Test
+  public void testSingleStuckPartitionBlocksEntirePush() {
+    int numPartitions = 10;
+    OfflinePushStatus offlinePushStatus = new OfflinePushStatus(kafkaTopic, numPartitions, replicationFactor, strategy);
+    List<PartitionStatus> partitionStatuses = new ArrayList<>(numPartitions);
+
+    for (int p = 0; p < numPartitions; p++) {
+      PartitionStatus partitionStatus = new PartitionStatus(p);
+      List<ReplicaStatus> replicaStatuses = new ArrayList<>(replicationFactor);
+      for (int r = 0; r < replicationFactor; r++) {
+        replicaStatuses.add(new ReplicaStatus("instance_" + r));
+      }
+      partitionStatus.setReplicaStatuses(replicaStatuses);
+
+      if (p == 5) {
+        // Partition 5: stuck on xinfra PENDING — server never progressed past STARTED.
+        // All replicas remain in STARTED (the default). No EOP ever written to ZK.
+        // This simulates the xinfra KafkaConsumerHandler.pausedShardsWaitingPosition
+        // hang where PubSubPosition.PENDING is never resolved.
+      } else {
+        // All other partitions: normal progression through EOP → TOPIC_SWITCH
+        for (int r = 0; r < replicationFactor; r++) {
+          partitionStatus.updateReplicaStatus("instance_" + r, END_OF_PUSH_RECEIVED);
+          partitionStatus.updateReplicaStatus("instance_" + r, TOPIC_SWITCH_RECEIVED);
+        }
+      }
+      partitionStatuses.add(partitionStatus);
+    }
+    offlinePushStatus.setPartitionStatuses(partitionStatuses);
+
+    // Push is in STARTED (never advanced because the controller never sent TOPIC_SWITCH)
+    Assert.assertEquals(offlinePushStatus.getCurrentStatus(), STARTED);
+
+    // The single stuck partition blocks the entire push
+    Assert.assertFalse(
+        offlinePushStatus.isEOPReceivedInEveryPartition(false),
+        "One partition stuck on xinfra PENDING (no EOP) should block buffer replay for all partitions");
+
+    // Now simulate the stuck partition finally getting unstuck (e.g., xinfra timeout added)
+    PartitionStatus partition5 = partitionStatuses.get(5);
+    for (int r = 0; r < replicationFactor; r++) {
+      partition5.updateReplicaStatus("instance_" + r, END_OF_PUSH_RECEIVED);
+    }
+    offlinePushStatus.setPartitionStatuses(partitionStatuses);
+
+    // Now buffer replay should be ready
+    Assert.assertTrue(
+        offlinePushStatus.isEOPReceivedInEveryPartition(false),
+        "After stuck partition recovers, buffer replay should proceed");
+  }
+
+  /**
+   * Regression test for VENG-12606: Verify that once push status has been updated to
+   * END_OF_PUSH_RECEIVED, isEOPReceivedInEveryPartition correctly returns false
+   * (preventing duplicate TOPIC_SWITCH sends).
+   */
+  @Test
+  public void testIsNotReadyToStartBufferReplayWhenStatusAlreadyEndOfPushReceived() {
+    OfflinePushStatus offlinePushStatus = new OfflinePushStatus(kafkaTopic, 1, replicationFactor, strategy);
+    PartitionStatus partitionStatus = new PartitionStatus(0);
+    List<ReplicaStatus> replicaStatuses = new ArrayList<>(replicationFactor);
+    for (int i = 0; i < replicationFactor; i++) {
+      replicaStatuses.add(new ReplicaStatus(Integer.toString(i)));
+    }
+    partitionStatus.setReplicaStatuses(replicaStatuses);
+    for (int i = 0; i < replicationFactor; i++) {
+      partitionStatus.updateReplicaStatus(Integer.toString(i), END_OF_PUSH_RECEIVED);
+    }
+    offlinePushStatus.setPartitionStatuses(Collections.singletonList(partitionStatus));
+
+    // Advance the push status to END_OF_PUSH_RECEIVED (as if ZK was already updated)
+    offlinePushStatus.updateStatus(END_OF_PUSH_RECEIVED);
+    Assert.assertEquals(offlinePushStatus.getCurrentStatus(), END_OF_PUSH_RECEIVED);
+
+    Assert.assertFalse(
+        offlinePushStatus.isEOPReceivedInEveryPartition(false),
+        "Should return false when push status is already END_OF_PUSH_RECEIVED to prevent duplicate TOPIC_SWITCH");
+  }
+
   @Test
   public void testSetPartitionStatus() {
     OfflinePushStatus offlinePushStatus =
